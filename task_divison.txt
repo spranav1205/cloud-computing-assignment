@@ -1,1 +1,22 @@
+Group No. 20
 
+2023A7PS0011P	NEHA GUJJARI
+
+
+2023A7PS0017P	SHANTNU SARDA
+
+
+2023A7PS0030P	NISHANT AMARISH PRADHAN
+
+
+2023B5A71082P	PRANAV RATNAKAR SURYAWANSHI
+
+
+Catalog Service — manages book metadata and copy identifiers.
+Member Service — manages member records.
+Reservation Service — orders requests and records reservations.
+Lending Service — manages checkout, return, and loan status.
+Availability Service — derives copy availability from reservations and loans.
+Fine Calculation Service — calculates overdue fines.
+Notification Service — sends reservation, availability, and due-date notices.
+Usage Analytics Service — summarizes borrowing, demand, and reservation conflicts."
