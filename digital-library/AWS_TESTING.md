@@ -1,7 +1,8 @@
 # Checkpoint 8: user-run AWS testing, one approved step at a time
 
-Status: preflight preparation only. No real Terraform plan, AWS deployment,
-image publication, or account inspection has been performed by the agent.
+Status: the user generated `infra/review.tfplan`; the agent inspected that saved
+file locally without AWS access. No apply, image publication, or deployment has
+been performed by the agent. The saved plan still needs the corrections below.
 
 Budget: approximately $40 in credits reported by the user. Testing may consume
 **at most $20**; preserve **$20 for the demo**. That limit is not a spending target.
@@ -23,8 +24,8 @@ aws eks describe-cluster-versions --region ap-south-1 --version-status STANDARD_
 Stop if the identity ends with `:root`. If no profile is configured or login has
 expired, report that error so authentication can be set up without sharing keys.
 The region is the existing Mumbai example; confirm if the team chose another.
-The Kubernetes version in `terraform.tfvars.example` is only a placeholder until
-the regional support check succeeds. Standard support matters for cost: AWS lists
+The user confirmed 1.35 is available in regional standard support. Recheck before
+later deployments. Standard support matters for cost: AWS lists
 EKS at $0.10/cluster-hour in standard support, versus $0.60 in extended support.
 [Official EKS pricing](https://aws.amazon.com/eks/pricing/).
 
@@ -36,8 +37,8 @@ do not create a duplicate of an existing team cluster or platform.
 
 ## 2. Make the proposed test concrete before provisioning
 
-Copy `infra/terraform.tfvars.example` to the ignored `infra/terraform.tfvars` and
-fill in the selected account, administrator IAM user/role ARN, region/AZs, supported
+Edit the ignored `infra/terraform.tfvars` and fill in the selected account,
+administrator IAM user/role ARN, region/AZs, supported
 Kubernetes version, actual administrator egress CIDR, and globally unique bucket.
 These files need no AWS secret keys or database password. Do not paste credentials
 into Terraform files or commit real variable files.
@@ -46,14 +47,15 @@ For the `library-deployer` IAM user, set `cluster_admin_principal_arn` to its
 `arn:aws:iam::ACCOUNT:user/library-deployer` ARN. The setting accepts an IAM user
 or role; it does not accept a root or STS assumed-role session ARN. Retrieve the
 active identity with `aws sts get-caller-identity --profile library-test`. The
-current example version 1.35 was confirmed in the user's regional standard-support
+selected version 1.35 was confirmed in the user's regional standard-support
 output. Fill `eks_public_access_cidrs` with the administrator's actual public IPv4
 address followed by `/32`; `curl.exe https://checkip.amazonaws.com` displays that
 address without using account credentials. Pick a unique lowercase bucket name.
 
-To begin, from `digital-library/infra`, copy `terraform.tfvars.example` to
-`terraform.tfvars` once, edit those values, and select the authenticated profile
-with `$env:AWS_PROFILE = 'library-test'`. Keep the file local and ignored.
+Select the authenticated profile with `$env:AWS_PROFILE = 'library-test'` before
+user-run cloud commands. Keep the variable file local and ignored. Input definitions
+are documented in `infra/variables.tf` and `infra/README.md`; a second example
+variable file is no longer maintained.
 
 Agree on state ownership/location before any apply. Review the whole stack in
 the AWS Pricing Calculator for the actual region: one EKS control plane, one
@@ -76,7 +78,7 @@ yourself from `digital-library/infra` with the intended AWS profile selected:
 
 ```powershell
 terraform init -backend=false -input=false
-terraform plan -input=false -var-file='terraform.tfvars' -out='review.tfplan'
+terraform plan -input=false '-var-file=terraform.tfvars' '-out=review.tfplan'
 ```
 
 The plan can access AWS APIs using your credentials, but does not provision the
@@ -88,6 +90,27 @@ resources. The expected initial configuration primarily adds new resources.
 Only after reviewing the concrete plan, complete cost estimate, and cleanup
 responsibility should an individual apply operation be explicitly authorized.
 The previous mock-provider test plans were not this real AWS plan.
+
+### Saved-plan review
+
+The saved `review.tfplan` inspected during cleanup is complete and applyable from
+Terraform's perspective: **48 additions, zero changes, zero deletions**, with no
+prior managed resources in that plan's state. It targets Mumbai, EKS 1.35, one
+`t3.medium` worker, private encrypted `db.t4g.micro` with 20 GiB, and small
+provisioned DynamoDB capacities. This is not proof of account-wide inventory,
+deployment readiness, or budget compliance.
+
+Two input placeholders are still present in the saved plan:
+
+- `eks_public_access_cidrs` contains `203.0.113.10/32`, the documentation example,
+  rather than the administrator's real egress address. It would block their
+  intended public cluster-API access.
+- `cover_bucket_name` still contains `replace-with`. Replace it with an intentional,
+  globally unique name rather than relying on the example string.
+
+Correct the local variable file, then run a new plan yourself for review. Editing
+the inputs does not change an already saved plan. Do not apply this saved artifact.
+The complete cost estimate and GitOps/image/secret prerequisites remain pending.
 
 Administrator-identity compatibility was locally validated with five passing
 mock-provider tests, including IAM-user acceptance and rejection of root and

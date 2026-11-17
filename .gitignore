@@ -56,3 +56,12 @@ pnpm-debug.log*
 coverage/
 dist/
 build/
+
+# Digital Library local configuration and generated artifacts
+digital-library/**/.local/
+digital-library/**/*.db
+digital-library/**/*.tfvars
+digital-library/**/*.tfvars.json
+digital-library/**/*.tfplan
+digital-library/**/tfplan
+digital-library/**/plan.out

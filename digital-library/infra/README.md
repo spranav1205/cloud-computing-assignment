@@ -109,24 +109,35 @@ Do not remove the mock or run an unapproved real-account `terraform plan`.
 
 Commit `.terraform.lock.hcl` to preserve provider selection/checksums. Do not commit
 `.terraform/`, Terraform state, plan files, real `.tfvars` files, credentials, or
-crash logs. The example file contains placeholders only and is not automatically
-loaded. These checks require neither actual nor dummy AWS credentials.
+crash logs. These checks require neither actual nor dummy AWS credentials.
+
+The single local configuration file is ignored `terraform.tfvars`; the redundant
+example file was removed by the user. Required inputs are:
+
+| Input | Value to supply locally |
+| --- | --- |
+| `aws_account_id` | Intended account's 12-digit ID, matching the active profile |
+| `cluster_admin_principal_arn` | Existing IAM user/role ARN in that account |
+| `kubernetes_version` | Regionally available standard-support version; 1.35 was confirmed |
+| `eks_public_access_cidrs` | Actual administrator egress IPv4 CIDR, usually `/32` |
+| `cover_bucket_name` | Intentional globally unique lowercase bucket name |
+
+Region/AZ defaults are Mumbai (`ap-south-1`, AZs `a` and `b`); keep overrides in
+the same local file if the team selects another region. See `variables.tf` for
+all defaults and validation rules. No AWS keys or database passwords belong there.
 
 No backend is configured. Before any approved deployment, agree with the team on
 encrypted remote state, state locking, access controls, and ownership. Creating
 the backend's resources is also a separate, explicitly approved operation. Do not
 treat the absence of a configured backend as permission to create local cloud state.
 
-**Verification on this workstation:** Terraform 1.16.2 and the signed AWS provider
-6.73.0 were installed/selected. Formatting, `terraform validate`, and all three
-mock-provider test runs passed with no validation warnings. No real-account plan,
-AWS resource read/write, remote-state access, or deployment ran. The Windows CLI
-requires the backslash test-file filter shown above; a forward-slash filter did
-not select the test file. Confirm the test summary says **3 passed**, not 0 tests.
-
-The subsequent deployment preparation renamed the administrator input to
-`cluster_admin_principal_arn` and added IAM-user/root validation coverage. The
-expanded suite now reports **5 passed**, with configuration validation passing.
+**Recorded verification:** Terraform 1.16.2 with AWS provider 6.73.0 passed
+formatting, validation, and **5 mock-provider tests**, including IAM-user acceptance
+and wrong-account/root rejection. The Windows CLI requires the backslash test-file
+filter above; confirm that the summary reports five tests rather than zero.
+The user later generated a real saved plan, which was inspected locally during
+cleanup. Its 48 additions and remaining placeholder inputs are documented in
+`../AWS_TESTING.md`. The agent has run no AWS plan, apply, or deployment.
 
 ## Handoff and deployment decisions
 
