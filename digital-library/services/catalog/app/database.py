@@ -74,6 +74,20 @@ class CatalogDatabase:
         self.copies.put_item(Item=copy, ConditionExpression="attribute_not_exists(copy_id)")
         return copy
 
+    def set_pending_cover(self, book_id: str, key: str) -> None:
+        self.books.update_item(
+            Key={"book_id": book_id}, UpdateExpression="SET pending_cover_key = :key",
+            ExpressionAttributeValues={":key": key}, ConditionExpression="attribute_exists(book_id)",
+        )
+
+    def confirm_cover(self, book_id: str, key: str) -> dict:
+        result = self.books.update_item(
+            Key={"book_id": book_id}, UpdateExpression="SET cover_key = :key REMOVE pending_cover_key",
+            ExpressionAttributeValues={":key": key}, ConditionExpression="attribute_exists(book_id)",
+            ReturnValues="ALL_NEW",
+        )
+        return result["Attributes"]
+
     def list_copies(self, book_id: str, limit: int, key: dict | None) -> dict:
         options = {"IndexName": "book_id-index", "KeyConditionExpression": Key("book_id").eq(book_id), "Limit": limit}
         if key:

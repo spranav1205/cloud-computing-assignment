@@ -16,7 +16,8 @@ from prometheus_client import CollectorRegistry, Counter, Histogram, generate_la
 from prometheus_client.exposition import CONTENT_TYPE_LATEST
 
 from app.database import CatalogDatabase, local_resource
-from app.models import BookCreate, BookPage, BookResponse, CopyPage, CopyResponse
+from app.covers import CoverStorage
+from app.models import BookCreate, BookPage, BookResponse, CopyPage, CopyResponse, CoverUpload, CoverConfirm
 
 logger = logging.getLogger("catalog")
 
@@ -46,7 +47,10 @@ def create_app(database: CatalogDatabase | None = None) -> FastAPI:
     async def lifespan(app):
         app.state.database = database if database is not None else CatalogDatabase(
             local_resource(), os.environ.get("BOOKS_TABLE", "Books"), os.environ.get("COPIES_TABLE", "Copies"))
+        app.state.covers = CoverStorage()
         yield
+        app.state.covers.client.close()
+        app.state.covers.signer.close()
         if database is None:
             app.state.database.books.meta.client.close()
 
@@ -75,7 +79,7 @@ def create_app(database: CatalogDatabase | None = None) -> FastAPI:
         code = error.response["Error"]["Code"]
         if code == "ConditionalCheckFailedException":
             return JSONResponse(status_code=409, content={"detail": "Resource already exists"})
-        logger.error("DynamoDB request failed: %s", code)
+        logger.error("Catalog storage request failed: %s", code)
         return JSONResponse(status_code=503, content={"detail": "Catalog storage unavailable"})
 
     @app.exception_handler(BotoCoreError)
@@ -95,6 +99,7 @@ def create_app(database: CatalogDatabase | None = None) -> FastAPI:
     @app.get("/ready")
     def ready(request: Request):
         request.app.state.database.ready()
+        request.app.state.covers.ready()
         return {"status": "ready"}
 
     @app.get("/metrics", include_in_schema=False)
@@ -129,5 +134,31 @@ def create_app(database: CatalogDatabase | None = None) -> FastAPI:
         key = continuation_key(last_evaluated_key, str(book_id))
         require_book(db, book_id)
         return db.list_copies(str(book_id), limit, key)
+
+    @app.post("/books/{book_id}/cover/upload-url")
+    def cover_upload(book_id: UUID, data: CoverUpload, request: Request):
+        db = request.app.state.database
+        require_book(db, book_id)
+        key, upload = request.app.state.covers.upload_url(str(book_id), data.content_type)
+        db.set_pending_cover(str(book_id), key)
+        return upload
+
+    @app.post("/books/{book_id}/cover/confirm", response_model=BookResponse)
+    def cover_confirm(book_id: UUID, request: Request, data: CoverConfirm | None = None):
+        db = request.app.state.database
+        book = require_book(db, book_id)
+        key = book.get("pending_cover_key")
+        if key is None:
+            raise HTTPException(409, "No pending cover upload")
+        request.app.state.covers.verify(key)
+        return db.confirm_cover(str(book_id), key)
+
+    @app.get("/books/{book_id}/cover-url")
+    def cover_download(book_id: UUID, request: Request):
+        book = require_book(request.app.state.database, book_id)
+        key = book.get("cover_key")
+        if key is None:
+            raise HTTPException(404, "Book has no cover")
+        return request.app.state.covers.download_url(key)
 
     return app

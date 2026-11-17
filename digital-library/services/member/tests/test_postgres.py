@@ -20,7 +20,7 @@ def postgres_client():
     if not url:
         pytest.skip("Set TEST_DATABASE_URL for local PostgreSQL integration tests")
     parsed = make_url(url)
-    if parsed.host not in {"localhost", "127.0.0.1"} or parsed.database != "member_test":
+    if parsed.host not in {"localhost", "127.0.0.1", "postgres"} or parsed.database != "member_test":
         pytest.fail("Integration tests require local PostgreSQL database member_test")
     engine = create_engine(url)
     Base.metadata.create_all(engine)

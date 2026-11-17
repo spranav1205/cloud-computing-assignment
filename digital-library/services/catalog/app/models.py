@@ -1,6 +1,7 @@
 """Catalog request validation; no availability or lending attributes."""
 
 import re
+from typing import Literal
 from datetime import datetime
 from uuid import UUID
 
@@ -46,3 +47,13 @@ class BookPage(BaseModel):
 class CopyPage(BaseModel):
     items: list[CopyResponse]
     last_evaluated_key: dict[str, str] | None
+
+
+class CoverUpload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    content_type: Literal["image/jpeg", "image/png"]
+
+
+class CoverConfirm(BaseModel):
+    # Empty/absent body only: keys are always loaded from the book, never the client.
+    model_config = ConfigDict(extra="forbid")
