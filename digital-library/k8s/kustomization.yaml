@@ -4,3 +4,5 @@ resources:
   - namespace.yaml
   - member.yaml
   - catalog.yaml
+  - reservation.yaml
+  - notification.yaml

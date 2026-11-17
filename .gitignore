@@ -65,3 +65,5 @@ digital-library/**/*.tfvars.json
 digital-library/**/*.tfplan
 digital-library/**/tfplan
 digital-library/**/plan.out
+
+blackboard.txt

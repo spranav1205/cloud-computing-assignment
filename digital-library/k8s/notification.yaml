@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification
+  namespace: library
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: notification}
+  template:
+    metadata:
+      labels: {app: notification}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: notification
+          image: library-notification:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8004
+          env:
+            - name: AWS_REGION
+              valueFrom:
+                configMapKeyRef:
+                  name: notification-config
+                  key: AWS_REGION
+            - name: NOTIFICATION_QUEUE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: notification-config
+                  key: NOTIFICATION_QUEUE_URL
+                  optional: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          startupProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 3
+            failureThreshold: 20
+          readinessProbe:
+            httpGet: {path: /ready, port: http}
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+          volumeMounts:
+            - name: temporary
+              mountPath: /tmp
+      volumes:
+        - name: temporary
+          emptyDir:
+            sizeLimit: 100Mi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notification-config
+  namespace: library
+data:
+  AWS_REGION: ap-south-1
+  # Set this for AWS/SQS mode; omit it for the local in-memory adapter.
+  NOTIFICATION_QUEUE_URL: ""
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification
+  namespace: library
+spec:
+  selector: {app: notification}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

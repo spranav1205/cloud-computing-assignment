@@ -27,7 +27,8 @@ docker compose up --build -d --wait --wait-timeout 600
 docker compose ps
 ```
 
-This starts both APIs, PostgreSQL, DynamoDB Local, and MinIO. Separate initialization
+This starts the Member, Catalog, Reservation, and Notification APIs, PostgreSQL,
+DynamoDB Local, and MinIO. Separate initialization
 jobs install development dependencies into named Python volumes, initialize tables,
 and configure a private cover bucket and restricted MinIO user. Exit code 0 for
 these jobs is expected. API startup itself does not create tables. Initialization
@@ -43,11 +44,13 @@ endpoints. Published ports bind to loopback. Stop host API processes on ports
 | --- | --- |
 | Member API / docs | http://127.0.0.1:8001/docs |
 | Catalog API / docs | http://127.0.0.1:8002/docs |
+| Reservation API / docs | http://127.0.0.1:8003/docs |
+| Notification API / docs | http://127.0.0.1:8004/docs |
 | PostgreSQL | 127.0.0.1:5432 |
 | DynamoDB Local | http://127.0.0.1:8000 |
 | MinIO S3 / console | http://127.0.0.1:9000 / http://127.0.0.1:9001 |
 
-For startup problems, inspect `docker compose logs member-init catalog-init minio-init member catalog`.
+For startup problems, inspect `docker compose logs member-init catalog-init minio-init member catalog reservation notification`.
 To use packaged non-root images with read-only filesystems and no source mounts:
 
 ```powershell
@@ -58,6 +61,11 @@ Use `docker compose stop` to stop local containers without removing volumes.
 PostgreSQL and MinIO persist data in named volumes. DynamoDB Local is in-memory:
 API restarts preserve records, but restarting its container loses books/copies.
 Avoid `docker compose down -v` if you want to retain volume data.
+
+Reservation uses PostgreSQL and an in-process lock by default. Set
+`ZOOKEEPER_HOSTS` in the Compose environment when running the distributed-lock
+demo. Notification uses an in-memory queue locally; set `NOTIFICATION_QUEUE_URL`
+and `AWS_REGION` only when connecting it to an approved SQS queue.
 
 ## Tests
 
@@ -116,6 +124,17 @@ with basic format validation. Book lists use Scan with no guaranteed order or
 search; copy lists use an eventually consistent GSI Query. Lists return `items`
 and `last_evaluated_key`; send a non-null key as URL-encoded JSON in the same query
 parameter to fetch the next page.
+
+Reservation supports `POST /reservations`, `GET /reservations/{id}`, and
+`DELETE /reservations/{id}`. The first active reservation for a book is `READY`;
+later requests are FIFO `WAITLISTED`. Cancelling a ready reservation promotes the
+oldest waiter while a per-book coordinator prevents concurrent allocation. Local
+mode uses an in-process lock; set `ZOOKEEPER_HOSTS` to use ZooKeeper locks.
+
+Notification supports `POST /notifications` for reservation, availability, due-date,
+and return events. Without `NOTIFICATION_QUEUE_URL`, local mode queues in memory;
+with that variable it publishes to SQS. The worker consumes SQS messages and logs
+delivery to stdout, leaving email/SMS integration to the notification provider.
 
 Use `/docs` for interactive requests, or run these PowerShell examples:
 
