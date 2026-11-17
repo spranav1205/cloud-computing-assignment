@@ -1,21 +1,42 @@
-# Checkpoint 1: Minimal Member and Catalog Design
+# Digital Library: Microservices Design
 
-**Status:** Design only. Do not implement until approved.
+This document records the agreed service boundaries and implementation notes.
+The current task division assigns Member and Catalog to Pranav; Reservation and
+Notification to Nishant; and Usage Analytics and Fine Calculation to Shantnu.
+This implementation includes Shantnu's two service deliverables alongside the
+existing services.
 
 ## Scope
 
-Implement only the Member and Catalog services and infrastructure assigned to this team member. Other services (loans, reservations, fines, notifications, analytics), ArgoCD, autoscaling, and monitoring infrastructure belong to other members and are out of scope.
+Member and Catalog remain scoped to their assigned services and infrastructure.
+The Usage Analytics and Fine Calculation services are separate assignments:
+Usage Analytics consumes lending/reservation events, while Fine Calculation
+reads the Lending service's authoritative `loans` table. Neither service owns
+loan, reservation, or catalog records.
 
 Where the starter design conflicts with the agreed task division, use the current assignment: **Member records in PostgreSQL; books and copies in DynamoDB; covers in S3**. Other services access these through APIs.
 
 ## Stack and structure
 
-- Python + FastAPI for both services.
+- Python + FastAPI for Member, Catalog, Reservation, Notification, and Fine
+  Calculation. Usage Analytics is a Java 17 Flink job with a Kafka connector.
 - PostgreSQL for members (SQLAlchemy is sufficient).
 - DynamoDB for books and copies (boto3).
 - S3 for book-cover objects; MinIO for local testing.
 - Terraform for assigned AWS resources; Docker and Kubernetes for deployment.
-- Local development with Docker Compose: PostgreSQL, DynamoDB Local, MinIO, and the two APIs.
+- Local development with Docker Compose: PostgreSQL, DynamoDB Local, MinIO, and
+  the HTTP APIs. Usage Analytics is submitted separately to the managed Flink
+  cluster; see its [job guide](services/usage-analytics/README.md).
+
+## Shantnu's service contracts
+
+- **Fine Calculation:** `GET /loans/{id}/fine` reads `loan_id`, `due_at`, and
+  `returned_at` from the Lending-owned `loans` table. It does not create or
+  migrate that table. The daily rate defaults to 100 cents and is configurable.
+- **Usage Analytics:** consumes reservation and loan events from Kafka and
+  publishes per-book one-minute event-time aggregates to a separate results
+  topic. Its event and output schemas are in the
+  [job guide](services/usage-analytics/README.md).
 
 Keep the code small: routes, data models, and database access. Split files only when they become difficult to maintain. Do not build a generic repository framework, shared application framework, or unnecessary abstractions.
 

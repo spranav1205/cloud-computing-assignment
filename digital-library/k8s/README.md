@@ -38,7 +38,7 @@ docker run --rm --volume "${workspacePath}:/workspace:ro" --workdir /workspace p
 ```
 
 `kubectl kustomize` only renders local files. The Python validator uses bundled
-Kubernetes 1.35.0 schemas and strict unknown-field checks. It validates all fourteen
+Kubernetes 1.35.0 schemas and strict unknown-field checks. It validates all sixteen
 resources, with no skips or cluster access. Choose the schema version matching the
 approved EKS version when that decision is made. This is syntax/schema validation,
 not an EKS runtime test. Do not run `kubectl apply`, even as a server-side dry run,
@@ -50,8 +50,8 @@ against the final cluster during this checkpoint.
 | --- | --- |
 | GitOps source path | `digital-library/k8s`, plain Kustomize; team supplies repository URL/revision |
 | Namespace | `library` |
-| Workloads | `member`, `catalog`, `reservation`, and `notification`, one replica each, ClusterIP only |
-| Service addresses | `member.library.svc.cluster.local:80`, `catalog.library.svc.cluster.local:80`, `reservation.library.svc.cluster.local:80`, `notification.library.svc.cluster.local:80` |
+| Workloads | `member`, `catalog`, `reservation`, `notification`, and `fine`, one replica each, ClusterIP only |
+| Service addresses | `member.library.svc.cluster.local:80`, `catalog.library.svc.cluster.local:80`, `reservation.library.svc.cluster.local:80`, `notification.library.svc.cluster.local:80`, `fine.library.svc.cluster.local:80` |
 | Runtime ports | Member 8001, Catalog 8002; named `http` ports |
 | Probes | `/health` for startup/liveness, `/ready` for storage readiness |
 | Monitoring handoff | `/metrics`, scrape annotations, stdout logs; Member 4 owns collection |
@@ -67,8 +67,14 @@ service-account identity for IRSA and disables EC2 metadata credential fallback.
 Reservation and Notification use the same hardened pod defaults. Notification
 uses the optional `notification-config` ConfigMap; provide `NOTIFICATION_QUEUE_URL`
 for SQS mode, otherwise it intentionally uses its in-memory local adapter.
+Fine reads the shared lending database using the externally managed
+`fine-database` Secret (`url` key); grant its database user read-only access to
+the `loans` table. The URL must use `sslmode=verify-full` and
+`sslrootcert=/etc/rds-ca/global-bundle.pem`; the pod mounts the existing `rds-ca`
+ConfigMap. Set `FINE_PER_DAY_CENTS` to the agreed daily rate before sync.
 There is no HPA, ArgoCD Application, ingress, load balancer, monitoring stack, or
-other service's business logic in these files.
+Flink/EMR workload in these files. Usage Analytics runs as a Flink job on the
+managed EMR cluster, not as an EKS deployment.
 
 Before the first approved sync, Member 3 must review/replace:
 

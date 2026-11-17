@@ -6,3 +6,4 @@ resources:
   - catalog.yaml
   - reservation.yaml
   - notification.yaml
+  - fine.yaml

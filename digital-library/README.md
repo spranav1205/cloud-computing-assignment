@@ -1,9 +1,14 @@
-# Digital Library: Member and Catalog
+# Digital Library Microservices
 
 Member manages member identities in PostgreSQL. Catalog manages books and copy
 identities in DynamoDB and private cover images in S3-compatible storage. Both
 expose REST APIs, OpenAPI docs, `/health`, `/ready`, `/metrics`, and stdout logs.
 Neither service manages reservations, loans, fines, or availability.
+
+Shantnu's services are included as separate components: Fine Calculation reads
+the Lending service's loan records and Usage Analytics processes Kafka events
+with a Flink job. See [Usage Analytics](services/usage-analytics/README.md) for
+the event contract and EMR submission steps.
 
 Implementation and packaging were tested locally. The user-generated saved AWS
 plan has been inspected, but the agent has not provisioned resources. See
@@ -27,7 +32,7 @@ docker compose up --build -d --wait --wait-timeout 600
 docker compose ps
 ```
 
-This starts the Member, Catalog, Reservation, and Notification APIs, PostgreSQL,
+This starts the Member, Catalog, Reservation, Fine Calculation, and Notification APIs, PostgreSQL,
 DynamoDB Local, and MinIO. Separate initialization
 jobs install development dependencies into named Python volumes, initialize tables,
 and configure a private cover bucket and restricted MinIO user. Exit code 0 for
@@ -46,6 +51,7 @@ endpoints. Published ports bind to loopback. Stop host API processes on ports
 | Catalog API / docs | http://127.0.0.1:8002/docs |
 | Reservation API / docs | http://127.0.0.1:8003/docs |
 | Notification API / docs | http://127.0.0.1:8004/docs |
+| Fine Calculation API / docs | http://127.0.0.1:8005/docs |
 | PostgreSQL | 127.0.0.1:5432 |
 | DynamoDB Local | http://127.0.0.1:8000 |
 | MinIO S3 / console | http://127.0.0.1:9000 / http://127.0.0.1:9001 |
@@ -66,6 +72,9 @@ Reservation uses PostgreSQL and an in-process lock by default. Set
 `ZOOKEEPER_HOSTS` in the Compose environment when running the distributed-lock
 demo. Notification uses an in-memory queue locally; set `NOTIFICATION_QUEUE_URL`
 and `AWS_REGION` only when connecting it to an approved SQS queue.
+Fine Calculation reads the `loans` table without creating or migrating it; it
+returns 404 until a Lending service has created the requested loan. Its default
+rate is 100 cents per overdue day and can be changed with `FINE_PER_DAY_CENTS`.
 
 ## Tests
 
@@ -131,6 +140,11 @@ later requests are FIFO `WAITLISTED`. Cancelling a ready reservation promotes th
 oldest waiter while a per-book coordinator prevents concurrent allocation. Local
 mode uses an in-process lock; set `ZOOKEEPER_HOSTS` to use ZooKeeper locks.
 
+Fine Calculation supports `GET /loans/{id}/fine`. It assesses the loan through
+its return timestamp, or the current UTC time if it remains open. Any partial
+overdue day is charged as a full day. The response expresses money in integer
+cents and includes the rate and overdue-day count.
+
 Notification supports `POST /notifications` for reservation, availability, due-date,
 and return events. Without `NOTIFICATION_QUEUE_URL`, local mode queues in memory;
 with that variable it publishes to SQS. The worker consumes SQS messages and logs
@@ -167,12 +181,13 @@ automatic cleanup. Old/unconfirmed covers remain stored.
 
 ## Verification and cloud deployment
 
-Recorded implementation results: **55 service tests**, **5 offline Terraform
-tests**, and strict validation of **9 Kubernetes resources** passed. Packaged-image
-integration, API restart persistence, and PostgreSQL outage/recovery were verified
-locally. A non-failing upstream Starlette/httpx deprecation warning remains.
-These are recorded results, not a claim that every check runs on documentation
-edits. Real EKS/IRSA/RDS connectivity and GitOps reconciliation remain unverified.
+The existing Member/Catalog checkpoint recorded **55 service tests**, **5 offline
+Terraform tests**, and packaged-image integration. For Shantnu's services,
+**5 Fine tests**, **2 Flink tests**, strict validation of **16 Kubernetes
+resources**, and Docker Compose configuration validation passed. The Flink job
+builds as a shaded jar; a live Kafka/EMR run has not been performed and no cloud
+resources were provisioned. Real EKS/IRSA/RDS connectivity and GitOps
+reconciliation remain unverified.
 
 AWS mode is explicit (`APP_ENV=aws`); local mode is the default. Cloud prerequisites,
 image publication, RDS TLS/Secret delivery, and Member 3's GitOps handoff are in
