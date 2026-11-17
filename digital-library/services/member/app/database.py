@@ -4,7 +4,7 @@ import os
 from uuid import UUID
 
 from sqlalchemy import create_engine, select
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session
 
 from app.models import Member, MemberCreate, MemberUpdate
@@ -16,6 +16,13 @@ def configured_engine() -> Engine:
         raise RuntimeError("Set DATABASE_URL to a local PostgreSQL connection URL")
     if not url.startswith("postgresql+psycopg://"):
         raise RuntimeError("DATABASE_URL must use postgresql+psycopg://")
+    mode = os.environ.get("APP_ENV", "local")
+    if mode not in {"local", "aws"}:
+        raise RuntimeError("APP_ENV must be local or aws")
+    if mode == "aws":
+        query = make_url(url).query
+        if query.get("sslmode") != "verify-full" or not query.get("sslrootcert"):
+            raise RuntimeError("AWS database connections require sslmode=verify-full and sslrootcert")
     return create_engine(url, pool_pre_ping=True, connect_args={"connect_timeout": 3})
 
 

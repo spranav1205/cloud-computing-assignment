@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 from prometheus_client import CollectorRegistry, Counter, Histogram, generate_latest
 from prometheus_client.exposition import CONTENT_TYPE_LATEST
 
-from app.database import CatalogDatabase, local_resource
+from app.database import CatalogDatabase, configured_resource
 from app.covers import CoverStorage
 from app.models import BookCreate, BookPage, BookResponse, CopyPage, CopyResponse, CoverUpload, CoverConfirm
 
@@ -46,11 +46,12 @@ def create_app(database: CatalogDatabase | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app):
         app.state.database = database if database is not None else CatalogDatabase(
-            local_resource(), os.environ.get("BOOKS_TABLE", "Books"), os.environ.get("COPIES_TABLE", "Copies"))
+            configured_resource(), os.environ.get("BOOKS_TABLE", "Books"), os.environ.get("COPIES_TABLE", "Copies"))
         app.state.covers = CoverStorage()
         yield
         app.state.covers.client.close()
-        app.state.covers.signer.close()
+        if app.state.covers.signer is not app.state.covers.client:
+            app.state.covers.signer.close()
         if database is None:
             app.state.database.books.meta.client.close()
 

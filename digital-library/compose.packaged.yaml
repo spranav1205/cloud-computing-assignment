@@ -1,0 +1,20 @@
+# Local verification of the built images, without source or virtualenv mounts.
+services:
+  member:
+    image: library-member:checkpoint7
+    build: ./services/member
+    volumes: !reset []
+    command: ["python", "-m", "uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8001"]
+    read_only: true
+    tmpfs: [/tmp]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/ready', timeout=4)"]
+  catalog:
+    image: library-catalog:checkpoint7
+    build: ./services/catalog
+    volumes: !reset []
+    command: ["python", "-m", "uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8002"]
+    read_only: true
+    tmpfs: [/tmp]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/ready', timeout=4)"]

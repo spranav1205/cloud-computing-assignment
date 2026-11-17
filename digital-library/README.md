@@ -1,9 +1,16 @@
 # Digital Library: Member and Catalog checkpoints
 
 Checkpoints 2-5 implement Member, Catalog books/copies, private book covers, and
-full local Docker Compose integration. Terraform, deployment Dockerfiles, and
-Kubernetes remain for later checkpoints.
+full local Docker Compose integration. Checkpoint 6 adds Terraform definitions
+with offline validation only; see [infra/README.md](infra/README.md) for resources,
+security decisions, costs, test commands, and team integration outputs.
+Checkpoint 7 adds deployment Dockerfiles, locally verified packaged images, and
+schema-validated Kubernetes manifests; see [k8s/README.md](k8s/README.md) for exact
+commands and the Member 3 GitOps handoff. No cloud deployment has occurred.
 No AWS credentials, AWS calls, or cloud resources are needed for these steps.
+
+AWS testing is being prepared separately in [AWS_TESTING.md](AWS_TESTING.md).
+Start with its user-run read-only checks; a real plan/apply has not been executed.
 
 Member uses FastAPI, SQLAlchemy, and PostgreSQL. Routes and HTTP handling are in
 `services/member/app/main.py`, validation and the table model are in `models.py`,

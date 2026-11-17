@@ -8,6 +8,7 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from fastapi import HTTPException
+from app.config import aws_mode, aws_region
 
 MAX_COVER_BYTES = 5_000_000
 URL_SECONDS = 300
@@ -29,10 +30,19 @@ def local_s3(endpoint: str | None = None):
 
 class CoverStorage:
     def __init__(self):
-        self.client = local_s3()
-        # Sign the browser-reachable host directly; changing a signed URL breaks it.
-        self.signer = local_s3(os.environ.get("S3_PUBLIC_ENDPOINT_URL") or None)
-        self.bucket = "library-covers"
+        if aws_mode():
+            self.bucket = os.environ.get("COVERS_BUCKET")
+            if not self.bucket:
+                raise ValueError("COVERS_BUCKET is required in AWS mode")
+            # IRSA supplies temporary credentials through the SDK's default chain.
+            self.client = boto3.client("s3", region_name=aws_region(),
+                config=Config(signature_version="s3v4", connect_timeout=3, read_timeout=3))
+            self.signer = self.client
+        else:
+            self.client = local_s3()
+            # Sign the browser-reachable host directly; changing a signed URL breaks it.
+            self.signer = local_s3(os.environ.get("S3_PUBLIC_ENDPOINT_URL") or None)
+            self.bucket = "library-covers"
 
     def ready(self) -> None:
         self.client.head_bucket(Bucket=self.bucket)

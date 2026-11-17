@@ -10,6 +10,14 @@ from boto3.dynamodb.conditions import Key
 from botocore.config import Config
 
 from app.models import BookCreate
+from app.config import aws_mode, aws_region
+
+
+def configured_resource():
+    if aws_mode():
+        return boto3.resource("dynamodb", region_name=aws_region(),
+                              config=Config(connect_timeout=3, read_timeout=3))
+    return local_resource()
 
 
 def local_resource():

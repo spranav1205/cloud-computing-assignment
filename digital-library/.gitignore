@@ -7,3 +7,9 @@ __pycache__/
 *.tfplan
 .terraform/
 .local/
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+tfplan
+plan.out
