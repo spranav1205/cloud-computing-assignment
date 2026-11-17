@@ -39,7 +39,10 @@ modules later; no other member's infrastructure is implemented here.
   20 GiB gp3 root disk, no SSH key, and IMDSv2 required with hop limit 1. The bound
   does not install an autoscaler. One worker is not sized for every team's Kafka,
   ZooKeeper, Flink, and monitoring workloads; coordinate sizing before deployment.
-- An explicit Kubernetes version and existing team administrator role are required.
+- An explicit Kubernetes version and existing administrator IAM user or role ARN
+  (`cluster_admin_principal_arn`) are required. Root/STS session ARNs cannot be used
+  as that access-entry principal. IAM users and roles are both supported by
+  [EKS access entries](https://docs.aws.amazon.com/eks/latest/userguide/creating-access-entries.html).
   The creator is not silently granted administrator access. Managed EKS bootstrap
   networking/DNS components are used; no ArgoCD, HPA, monitoring stack, ingress
   controller, application workloads, or custom platform add-ons are installed.
@@ -120,6 +123,10 @@ mock-provider test runs passed with no validation warnings. No real-account plan
 AWS resource read/write, remote-state access, or deployment ran. The Windows CLI
 requires the backslash test-file filter shown above; a forward-slash filter did
 not select the test file. Confirm the test summary says **3 passed**, not 0 tests.
+
+The subsequent deployment preparation renamed the administrator input to
+`cluster_admin_principal_arn` and added IAM-user/root validation coverage. The
+expanded suite now reports **5 passed**, with configuration validation passing.
 
 ## Handoff and deployment decisions
 

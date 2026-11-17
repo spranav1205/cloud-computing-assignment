@@ -44,12 +44,12 @@ variable "kubernetes_version" {
   }
 }
 
-variable "cluster_admin_role_arn" {
+variable "cluster_admin_principal_arn" {
   type        = string
-  description = "Existing team administrator IAM role, not a service workload role."
+  description = "Existing administrator IAM user or role ARN, not root or an STS session ARN."
   validation {
-    condition     = can(regex("^arn:aws:iam::${var.aws_account_id}:role/.+$", var.cluster_admin_role_arn))
-    error_message = "Use an existing IAM role ARN in the intended AWS account."
+    condition     = can(regex("^arn:aws:iam::${var.aws_account_id}:(user|role)/.+$", var.cluster_admin_principal_arn))
+    error_message = "Use an existing IAM user or role ARN in the intended AWS account; root and STS session ARNs are not EKS access-entry principals."
   }
 }
 

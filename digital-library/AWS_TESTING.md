@@ -30,17 +30,30 @@ EKS at $0.10/cluster-hour in standard support, versus $0.60 in extended support.
 
 Also confirm the current credit balance/expiry and Free-plan service availability
 in your Billing console. No billing or account credentials need to be shared.
-Before deployment, identify the existing team administrator IAM role and whether
+Before deployment, identify the existing administrator IAM user or role ARN and whether
 Member 3's ArgoCD and image registry are ready. The cluster is shared infrastructure;
 do not create a duplicate of an existing team cluster or platform.
 
 ## 2. Make the proposed test concrete before provisioning
 
 Copy `infra/terraform.tfvars.example` to the ignored `infra/terraform.tfvars` and
-fill in the selected account, existing administrator role, region/AZs, supported
+fill in the selected account, administrator IAM user/role ARN, region/AZs, supported
 Kubernetes version, actual administrator egress CIDR, and globally unique bucket.
 These files need no AWS secret keys or database password. Do not paste credentials
 into Terraform files or commit real variable files.
+
+For the `library-deployer` IAM user, set `cluster_admin_principal_arn` to its
+`arn:aws:iam::ACCOUNT:user/library-deployer` ARN. The setting accepts an IAM user
+or role; it does not accept a root or STS assumed-role session ARN. Retrieve the
+active identity with `aws sts get-caller-identity --profile library-test`. The
+current example version 1.35 was confirmed in the user's regional standard-support
+output. Fill `eks_public_access_cidrs` with the administrator's actual public IPv4
+address followed by `/32`; `curl.exe https://checkip.amazonaws.com` displays that
+address without using account credentials. Pick a unique lowercase bucket name.
+
+To begin, from `digital-library/infra`, copy `terraform.tfvars.example` to
+`terraform.tfvars` once, edit those values, and select the authenticated profile
+with `$env:AWS_PROFILE = 'library-test'`. Keep the file local and ignored.
 
 Agree on state ownership/location before any apply. Review the whole stack in
 the AWS Pricing Calculator for the actual region: one EKS control plane, one
@@ -75,6 +88,10 @@ resources. The expected initial configuration primarily adds new resources.
 Only after reviewing the concrete plan, complete cost estimate, and cleanup
 responsibility should an individual apply operation be explicitly authorized.
 The previous mock-provider test plans were not this real AWS plan.
+
+Administrator-identity compatibility was locally validated with five passing
+mock-provider tests, including IAM-user acceptance and rejection of root and
+wrong-account access-entry principals. No real AWS plan ran as part of that check.
 
 ## 4. Deployment and cloud verification after their individual approvals
 

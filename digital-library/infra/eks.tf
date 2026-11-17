@@ -30,7 +30,7 @@ resource "aws_eks_cluster" "library" {
 
 resource "aws_eks_access_entry" "administrator" {
   cluster_name  = aws_eks_cluster.library.name
-  principal_arn = var.cluster_admin_role_arn
+  principal_arn = var.cluster_admin_principal_arn
   type          = "STANDARD"
 }
 

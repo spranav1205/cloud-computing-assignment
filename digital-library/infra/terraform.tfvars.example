@@ -1,9 +1,0 @@
-# Documentation examples, not credentials. Replace before a separately approved plan.
-aws_region              = "ap-south-1"
-aws_account_id          = "111111111111"
-availability_zones      = ["ap-south-1a", "ap-south-1b"]
-environment             = "dev"
-kubernetes_version      = "1.35" # Example only: review current EKS support before deployment.
-cluster_admin_role_arn  = "arn:aws:iam::111111111111:role/replace-with-team-admin-role"
-eks_public_access_cidrs = ["203.0.113.10/32"] # Documentation-only address; replace with actual admin egress.
-cover_bucket_name       = "replace-with-globally-unique-library-cover-bucket"

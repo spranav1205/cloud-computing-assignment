@@ -2,11 +2,11 @@
 mock_provider "aws" {}
 
 variables {
-  aws_account_id          = "111111111111"
-  cluster_admin_role_arn  = "arn:aws:iam::111111111111:role/offline-test-admin"
-  kubernetes_version      = "1.35"
-  eks_public_access_cidrs = ["203.0.113.10/32"]
-  cover_bucket_name       = "offline-example-library-covers"
+  aws_account_id              = "111111111111"
+  cluster_admin_principal_arn = "arn:aws:iam::111111111111:role/offline-test-admin"
+  kubernetes_version          = "1.35"
+  eks_public_access_cidrs     = ["203.0.113.10/32"]
+  cover_bucket_name           = "offline-example-library-covers"
 }
 
 run "private_storage_and_cluster" {
@@ -53,7 +53,26 @@ run "reject_public_cluster_access" {
 run "reject_wrong_administrator_account" {
   command = plan
   variables {
-    cluster_admin_role_arn = "arn:aws:iam::222222222222:role/other-account"
+    cluster_admin_principal_arn = "arn:aws:iam::222222222222:role/other-account"
   }
-  expect_failures = [var.cluster_admin_role_arn]
+  expect_failures = [var.cluster_admin_principal_arn]
+}
+
+run "accept_administrator_user" {
+  command = plan
+  variables {
+    cluster_admin_principal_arn = "arn:aws:iam::111111111111:user/library-deployer"
+  }
+  assert {
+    condition     = aws_eks_access_entry.administrator.principal_arn == "arn:aws:iam::111111111111:user/library-deployer"
+    error_message = "The IAM deployment user must be usable as the EKS administrator."
+  }
+}
+
+run "reject_root_access_entry" {
+  command = plan
+  variables {
+    cluster_admin_principal_arn = "arn:aws:iam::111111111111:root"
+  }
+  expect_failures = [var.cluster_admin_principal_arn]
 }
