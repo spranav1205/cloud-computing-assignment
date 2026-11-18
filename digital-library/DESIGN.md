@@ -134,7 +134,8 @@ Store covers in a private S3 bucket (MinIO locally) and store only the object ke
 
 - REST JSON APIs with basic HTTP status codes.
 - `/health` for Kubernetes health checks and `/metrics` for scraping by the monitoring team.
-- Log to stdout; do not add a monitoring stack.
+- Log to stdout. Cloud deployment forwards logs through Fluent Bit to CloudWatch
+  and deploys Prometheus/Grafana through Argo CD.
 - Basic automated tests of essential endpoints and data persistence.
 - No authentication system unless explicitly required by the assignment or team integration contract.
 
@@ -156,7 +157,11 @@ Terraform should define only the AWS components assigned to this member:
 
 Use simple, secure defaults: private database and bucket, no credentials committed to Git. Coordinate shared cluster networking and deployment interfaces with other members rather than implementing their services.
 
-Provide Dockerfiles and minimal Kubernetes Deployments, ClusterIP Services, environment configuration, and health probes for Member and Catalog. Leave ArgoCD, HPA, and monitoring stack deployment to the responsible team members.
+Provide Dockerfiles and Kubernetes Deployments, ClusterIP Services, environment
+configuration, health probes, two HPAs, an ALB Ingress, and GitOps manifests.
+The cloud notification implementation is the Lambda under
+`services/notification-lambda`; the local Notification API remains a Compose
+adapter for development.
 
 ## Implementation checkpoints
 

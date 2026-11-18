@@ -1,7 +1,8 @@
 # Checkpoint 6: Terraform proposal, not a deployment
 
-This directory defines only the agreed shared AWS resources. No AWS plan, apply,
-deployment, scaling, teardown, or account discovery is authorized by this checkpoint.
+This directory defines the complete assignment AWS resource set. No AWS plan,
+apply, deployment, scaling, teardown, or account discovery is authorized by
+this repository workflow.
 The configuration has no AWS data sources and no Kubernetes/Helm provider that
 could deploy workloads. A real-account plan still requires separate approval.
 
@@ -14,6 +15,8 @@ could deploy workloads. A real-account plan still requires separate approval.
 | `eks.tf` | EKS control plane, administrator access entry, node role, one managed node group |
 | `storage.tf` | Private PostgreSQL, Books/Copies tables with copy GSI, private cover bucket |
 | `catalog_iam.tf` | Catalog's service-account trust and resource-scoped storage permissions |
+| `messaging.tf` | Encrypted SQS queue/DLQ, Lambda function, event source mapping, and SES permissions |
+| `streaming.tf` | EMR/Flink cluster, streaming security group, service roles, and checkpoint/log permissions |
 | `outputs.tf` | Nonsecret resource identifiers for the team |
 | `tests/offline.tftest.hcl` | Mock-provider tests that do not contact AWS |
 
@@ -121,6 +124,7 @@ example file was removed by the user. Required inputs are:
 | `kubernetes_version` | Regionally available standard-support version; 1.35 was confirmed |
 | `eks_public_access_cidrs` | Actual administrator egress IPv4 CIDR, usually `/32` |
 | `cover_bucket_name` | Intentional globally unique lowercase bucket name |
+| `ses_sender` | SES-verified sender address for the notification Lambda |
 
 Region/AZ defaults are Mumbai (`ap-south-1`, AZs `a` and `b`); keep overrides in
 the same local file if the team selects another region. See `variables.tf` for

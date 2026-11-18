@@ -39,6 +39,8 @@ spec:
               value: "14"
             - name: MEMBER_URL
               value: http://member:80
+            - name: MEMBER_GRPC_TARGET
+              value: member:50051
             - name: CATALOG_URL
               value: http://catalog:80
             - name: RESERVATION_URL

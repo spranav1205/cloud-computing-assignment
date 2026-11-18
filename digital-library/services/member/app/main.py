@@ -1,6 +1,7 @@
 """Member REST API. Start with: python -m uvicorn app.main:create_app --factory."""
 
 import logging
+import os
 import sys
 from contextlib import asynccontextmanager
 from time import perf_counter
@@ -40,7 +41,16 @@ def create_app(engine: Engine | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(application: FastAPI):
         application.state.engine = engine if engine is not None else database.configured_engine()
+        grpc_server = None
+        grpc_port = os.environ.get("GRPC_PORT")
+        if grpc_port:
+            from app.grpc import create_server
+
+            grpc_server = create_server(application.state.engine, int(grpc_port))
+            grpc_server.start()
         yield
+        if grpc_server is not None:
+            grpc_server.stop(grace=2)
         if engine is None:
             application.state.engine.dispose()
 

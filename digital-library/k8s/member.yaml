@@ -48,10 +48,14 @@ spec:
           ports:
             - name: http
               containerPort: 8001
+            - name: grpc
+              containerPort: 50051
           envFrom:
             - configMapRef:
                 name: member-config
           env:
+            - name: GRPC_PORT
+              value: "50051"
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -113,3 +117,6 @@ spec:
     - name: http
       port: 80
       targetPort: http
+    - name: grpc
+      port: 50051
+      targetPort: grpc

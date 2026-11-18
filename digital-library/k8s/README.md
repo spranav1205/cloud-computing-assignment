@@ -1,8 +1,9 @@
-# Checkpoint 7: packaging and GitOps handoff
+# Final Kubernetes packaging and GitOps handoff
 
 These files are reviewable deployment inputs, not a deployment. No image was
 published, no Kubernetes cluster was contacted, and no AWS plan or operation ran.
-Member 3 owns ArgoCD/HPA configuration and the eventual GitOps sync.
+Argo CD owns the application sync; HPAs, ingress, platform services, and
+observability resources are included in the repository as GitOps inputs.
 
 ## Build and test the packaged images locally
 
@@ -80,9 +81,11 @@ TLS URLs with `sslmode=verify-full` and
 `sslrootcert=/etc/rds-ca/global-bundle.pem`. Lending's `/ready` endpoint also
 checks Member, Catalog, and Reservation service readiness. Its Kubernetes
 service URLs and the Availability Catalog URL are configured in the manifests.
-There is no HPA, ArgoCD Application, ingress, load balancer, monitoring stack, or
-Flink/EMR workload in these files. Usage Analytics runs as a Flink job on the
-managed EMR cluster, not as an EKS deployment.
+The final Kustomize tree includes two HPAs, the ALB ingress, Kafka, ZooKeeper,
+metrics-server, Prometheus/Grafana, and Fluent Bit. Usage Analytics runs as a
+Flink job on the managed EMR cluster, not as an EKS deployment. Notification
+uses the Terraform-managed Lambda/SQS path in cloud mode; its local API remains
+available only for Compose development.
 
 Before the first approved sync, Member 3 must review/replace:
 
@@ -139,3 +142,9 @@ Kubernetes scheduling, IRSA tokens, real RDS TLS, image pulls, EKS network acces
 and ArgoCD reconciliation require later approved environment testing. They are not
 claimed as verified by Docker or schema checks. Kubernetes is not installed or
 deployed locally by this checkpoint.
+
+The two Argo CD Application resources in `../argocd/` track the application
+Kustomize path and the platform Kustomize path. Bootstrap those Applications
+through the approved Argo CD installation path; after bootstrap, changes are
+made by Git commits and Argo reconciliation rather than direct workload
+commands.

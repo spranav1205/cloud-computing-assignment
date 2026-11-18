@@ -6,6 +6,7 @@ import os
 from uuid import UUID
 
 import httpx
+import grpc
 
 from app.models import LoanCreate
 
@@ -40,6 +41,12 @@ class LendingDependencies:
         self.catalog_url = catalog_url.rstrip("/")
         self.reservation_url = reservation_url.rstrip("/")
         self.client = client or httpx.Client(timeout=5.0)
+        self.member_grpc_target = os.environ.get("MEMBER_GRPC_TARGET")
+        self.member_grpc = (
+            grpc.insecure_channel(self.member_grpc_target)
+            if self.member_grpc_target
+            else None
+        )
 
     @classmethod
     def configured(cls) -> "LendingDependencies":
@@ -63,7 +70,10 @@ class LendingDependencies:
         except (KeyError, TypeError, ValueError) as error:
             raise LendingDependencyError("Reservation service returned an invalid reservation") from error
 
-        self._get(f"{self.member_url}/members/{data.member_id}", "Member not found")
+        if self.member_grpc is not None:
+            self._check_member_grpc(data.member_id, data.copy_id)
+        else:
+            self._get(f"{self.member_url}/members/{data.member_id}", "Member not found")
         self._require_copy(book_id, data.copy_id)
         return book_id
 
@@ -94,6 +104,24 @@ class LendingDependencies:
 
     def close(self) -> None:
         self.client.close()
+        if self.member_grpc is not None:
+            self.member_grpc.close()
+
+    def _check_member_grpc(self, member_id: UUID, copy_id: UUID) -> None:
+        call = self.member_grpc.unary_unary(
+            "/library.member.v1.MemberEligibility/CheckoutEligibility",
+            request_serializer=lambda value: json.dumps(value).encode("utf-8"),
+            response_deserializer=lambda value: json.loads(value.decode("utf-8")),
+        )
+        try:
+            result = call({"member_id": str(member_id), "copy_id": str(copy_id)}, timeout=5)
+        except grpc.RpcError as error:
+            raise LendingDependencyError("Member gRPC service unavailable") from error
+        if not result.get("eligible"):
+            reason = result.get("reason_code", "NOT_ELIGIBLE")
+            if reason == "MEMBER_NOT_FOUND":
+                raise LendingDependencyNotFound("Member not found")
+            raise CheckoutConflict("Member is not eligible for checkout")
 
     def _get(self, url: str, not_found: str) -> dict:
         try:

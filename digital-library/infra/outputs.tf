@@ -38,3 +38,24 @@ output "catalog" {
     service_account   = "catalog"
   }
 }
+
+output "event_driven_notification" {
+  value = {
+    queue_url       = aws_sqs_queue.notification.url
+    dead_letter_arn = aws_sqs_queue.notification_dlq.arn
+    lambda_name     = aws_lambda_function.notification.function_name
+  }
+}
+
+output "analytics" {
+  value = {
+    emr_cluster_id    = aws_emr_cluster.analytics.id
+    input_topic       = "library.events.v1"
+    results_topic     = "library.analytics.results.v1"
+    checkpoint_prefix = "s3://${aws_s3_bucket.covers.bucket}/flink/checkpoints/"
+  }
+}
+
+output "fluent_bit_role_arn" {
+  value = aws_iam_role.fluent_bit.arn
+}

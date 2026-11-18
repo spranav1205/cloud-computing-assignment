@@ -90,3 +90,12 @@ variable "protect_data" {
   default     = true
   description = "Deletion protection for RDS and DynamoDB. Changing this is a separately approved cloud mutation."
 }
+
+variable "ses_sender" {
+  type        = string
+  description = "Verified SES sender identity used by the notification Lambda."
+  validation {
+    condition     = can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", var.ses_sender))
+    error_message = "Supply a verified email address for SES."
+  }
+}

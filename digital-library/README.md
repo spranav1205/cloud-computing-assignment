@@ -239,3 +239,30 @@ image publication, RDS TLS/Secret delivery, and Member 3's GitOps handoff are in
 [k8s/README.md](k8s/README.md). Provisioning, scaling, and teardown each require
 separate approval. Preserve the $20 demo reserve; a saved plan is not deployment
 approval.
+
+## Assignment compliance map
+
+| Requirement | Implementation and evidence |
+| --- | --- |
+| (a) IaC for all cloud infrastructure | `infra/` provisions VPC, subnets, EKS, node group, RDS, DynamoDB, S3, SQS/DLQ, Lambda, IAM, and EMR. |
+| (b) Serverless service and communication mechanisms | `services/notification-lambda/` is the cloud Notification service, triggered by SQS. REST is used by APIs; gRPC is defined in `contracts/proto/member_eligibility.proto` and wired between Lending and Member. |
+| (c) Managed Kubernetes, two HPAs, sustained load | EKS is in `infra/eks.tf`; `k8s/hpa.yaml` defines Catalog and Reservation HPAs; `scripts/k6/reservation-load.js` supplies sustained traffic. |
+| (d) GitOps-only deployment | `argocd/application.yaml` tracks this repository and the cloud Kustomize path. Application changes are reconciled by Argo CD. |
+| (e) Managed Flink stream processing | `services/usage-analytics/` consumes `library.events.v1`, performs one-minute event-time aggregation, and publishes `library.analytics.results.v1`; EMR is in `infra/streaming.tf`. |
+| (f) Declared domain concept | Reservation allocation uses durable PostgreSQL state plus ZooKeeper ephemeral-sequential copy locks; the ensemble is in `k8s/platform/zookeeper.yaml`. |
+| (g) Three storage products | RDS PostgreSQL stores transactional data, DynamoDB stores catalog/projection data, and S3 stores covers, EMR logs, and Flink checkpoints. |
+| (h) Observability | `k8s/platform/observability.yaml` deploys Prometheus/Grafana dashboards; `k8s/platform/fluent-bit.yaml` centralizes service logs in CloudWatch. |
+
+### Cloud deployment order
+
+1. Fill the required Terraform variables, including the verified SES sender,
+   administrator ARN, EKS CIDR, account ID, and cover bucket name.
+2. Run formatting, offline initialization, validation, and mock tests. Do not
+   apply without explicit approval.
+3. Build and publish immutable images to the approved registry.
+4. Bootstrap Argo CD once, then submit only `argocd/application.yaml`; do not
+   use `kubectl apply` for application resources.
+5. Upload the shaded Flink jar and submit it to EMR with the documented Kafka
+   environment variables.
+6. Capture HPA, k6, Grafana, CloudWatch, ZooKeeper, Kafka, Lambda, and Flink
+   evidence before destroying short-lived demonstration resources.

@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package library.member.v1;
+
+service MemberEligibility {
+  rpc CheckoutEligibility (CheckoutEligibilityRequest)
+      returns (CheckoutEligibilityResponse);
+}
+
+message CheckoutEligibilityRequest {
+  string member_id = 1;
+  string copy_id = 2;
+}
+
+message CheckoutEligibilityResponse {
+  bool eligible = 1;
+  string reason_code = 2;
+  int32 active_loan_count = 3;
+  int32 max_active_loans = 4;
+}

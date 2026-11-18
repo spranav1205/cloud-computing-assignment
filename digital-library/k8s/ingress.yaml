@@ -1,0 +1,49 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: library-public
+  namespace: library
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /members
+            pathType: Prefix
+            backend:
+              service:
+                name: member
+                port:
+                  name: http
+          - path: /books
+            pathType: Prefix
+            backend:
+              service:
+                name: catalog
+                port:
+                  name: http
+          - path: /reservations
+            pathType: Prefix
+            backend:
+              service:
+                name: reservation
+                port:
+                  name: http
+          - path: /loans
+            pathType: Prefix
+            backend:
+              service:
+                name: lending
+                port:
+                  name: http
+          - path: /availability
+            pathType: Prefix
+            backend:
+              service:
+                name: availability
+                port:
+                  name: http

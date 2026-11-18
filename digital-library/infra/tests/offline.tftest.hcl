@@ -7,6 +7,7 @@ variables {
   kubernetes_version          = "1.35"
   eks_public_access_cidrs     = ["203.0.113.10/32"]
   cover_bucket_name           = "offline-example-library-covers"
+  ses_sender                  = "test@example.com"
 }
 
 run "private_storage_and_cluster" {

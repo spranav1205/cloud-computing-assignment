@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["eventId", "eventType", "schemaVersion", "occurredAt", "aggregateType", "aggregateId", "payload"],
+  "properties": {
+    "eventId": {"type": "string", "format": "uuid"},
+    "eventType": {"type": "string"},
+    "schemaVersion": {"type": "integer", "minimum": 1},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "aggregateType": {"type": "string"},
+    "aggregateId": {"type": "string"},
+    "correlationId": {"type": "string"},
+    "payload": {"type": "object"}
+  },
+  "additionalProperties": false
+}
