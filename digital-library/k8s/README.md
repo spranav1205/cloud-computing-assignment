@@ -47,6 +47,10 @@ against the final cluster during this checkpoint.
 
 ## What Member 3 receives
 
+The AWS database name is `digitallibrary` (RDS rejects `library` as an initial
+database name). Use Terraform's `member_database.database_name` output when
+constructing every cloud database connection URL. Local Compose keeps `library`.
+
 | Item | Contract |
 | --- | --- |
 | GitOps source path | `digital-library/k8s`, plain Kustomize; team supplies repository URL/revision |
