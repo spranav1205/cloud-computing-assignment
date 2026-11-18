@@ -34,7 +34,7 @@ class InMemoryQueue(NotificationQueue):
 class SqsQueue(NotificationQueue):
     def __init__(self):
         queue_url = os.environ["NOTIFICATION_QUEUE_URL"]
-        self.client = boto3.client("sqs", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+        self.client = boto3.client("sqs", region_name=os.environ.get("AWS_REGION", "ap-south-1"))
         self.queue_url = queue_url
 
     def publish(self, event: NotificationEvent) -> UUID:

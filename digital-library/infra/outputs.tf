@@ -59,3 +59,8 @@ output "analytics" {
 output "fluent_bit_role_arn" {
   value = aws_iam_role.fluent_bit.arn
 }
+
+output "image_repositories" {
+  value       = { for name, repo in aws_ecr_repository.service : name => repo.repository_url }
+  description = "ECR destinations consumed by scripts/publish-images.ps1."
+}

@@ -66,7 +66,7 @@ variable "eks_public_access_cidrs" {
 
 variable "node_instance_type" {
   type        = string
-  default     = "t3.medium"
+  default     = "t3.xlarge"
   description = "Small x86 development worker; validate capacity and pricing before deployment."
 }
 

@@ -1,10 +1,11 @@
-apiVersion: apps/v1
+﻿apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: zookeeper
   namespace: library
 spec:
   serviceName: zookeeper
+  podManagementPolicy: Parallel
   replicas: 3
   selector:
     matchLabels: {app: zookeeper}
@@ -14,15 +15,24 @@ spec:
     spec:
       containers:
         - name: zookeeper
-          image: bitnami/zookeeper:3.9
+          image: zookeeper:3.9.3
+          command: ["/bin/bash", "-ec"]
+          args:
+            - |
+              export ZOO_MY_ID=$(( ${HOSTNAME##*-} + 1 ))
+              exec /docker-entrypoint.sh zkServer.sh start-foreground
           ports:
-            - name: client
-              containerPort: 2181
+            - {name: client, containerPort: 2181}
+            - {name: quorum, containerPort: 2888}
+            - {name: election, containerPort: 3888}
           env:
-            - name: ALLOW_ANONYMOUS_LOGIN
-              value: "yes"
             - name: ZOO_SERVERS
-              value: server.1=zookeeper-0.zookeeper.library.svc.cluster.local:2888:3888;server.2=zookeeper-1.zookeeper.library.svc.cluster.local:2888:3888;server.3=zookeeper-2.zookeeper.library.svc.cluster.local:2888:3888
+              value: server.1=zookeeper-0.zookeeper.library.svc.cluster.local:2888:3888;2181 server.2=zookeeper-1.zookeeper.library.svc.cluster.local:2888:3888;2181 server.3=zookeeper-2.zookeeper.library.svc.cluster.local:2888:3888;2181
+            - {name: ZOO_4LW_COMMANDS_WHITELIST, value: 'ruok,srvr'}
+            - {name: JVMFLAGS, value: "-Xms64m -Xmx256m"}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: 500m, memory: 512Mi}
           readinessProbe:
             tcpSocket: {port: client}
             periodSeconds: 10
@@ -34,8 +44,9 @@ metadata:
   namespace: library
 spec:
   clusterIP: None
+  publishNotReadyAddresses: true
   selector: {app: zookeeper}
   ports:
-    - name: client
-      port: 2181
-      targetPort: client
+    - {name: client, port: 2181, targetPort: client}
+    - {name: quorum, port: 2888, targetPort: quorum}
+    - {name: election, port: 3888, targetPort: election}

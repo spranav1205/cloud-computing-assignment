@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel
-from sqlalchemy import DateTime, String, Uuid
+from sqlalchemy import DateTime, Enum, Uuid
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -27,7 +27,7 @@ class ReservationRecord(Base):
 
     reservation_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     book_id: Mapped[UUID] = mapped_column(Uuid)
-    status: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(Enum("READY", "WAITLISTED", "CANCELLED", name="reservation_status"))
     copy_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
 
 

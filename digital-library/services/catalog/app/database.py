@@ -26,7 +26,7 @@ def local_resource():
     if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "dynamodb"}:
         raise ValueError("Only local DynamoDB HTTP endpoints are permitted")
     return boto3.resource(
-        "dynamodb", endpoint_url=endpoint, region_name="us-east-1",
+        "dynamodb", endpoint_url=endpoint, region_name="ap-south-1",
         aws_access_key_id="dummy", aws_secret_access_key="dummy",
         config=Config(connect_timeout=3, read_timeout=3, retries={"max_attempts": 0}),
     )

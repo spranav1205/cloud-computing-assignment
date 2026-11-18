@@ -29,8 +29,8 @@ public class UsageAnalyticsJob {
 
     public static void main(String[] args) throws Exception {
         String brokers = requiredEnvironment("KAFKA_BOOTSTRAP_SERVERS");
-        String inputTopic = environmentOrDefault("KAFKA_INPUT_TOPIC", "library.events");
-        String resultsTopic = environmentOrDefault("KAFKA_RESULTS_TOPIC", "library.analytics.results");
+        String inputTopic = environmentOrDefault("KAFKA_INPUT_TOPIC", "library.events.v1");
+        String resultsTopic = environmentOrDefault("KAFKA_RESULTS_TOPIC", "library.analytics.results.v1");
         String groupId = environmentOrDefault("KAFKA_CONSUMER_GROUP", "library-usage-analytics");
         if (inputTopic.equals(resultsTopic)) {
             throw new IllegalArgumentException("Input and results Kafka topics must be different");
@@ -46,6 +46,7 @@ public class UsageAnalyticsJob {
                         source,
                         WatermarkStrategy.<String>forBoundedOutOfOrderness(
                                         Duration.ofSeconds(OUT_OF_ORDERNESS_SECONDS))
+                                .withIdleness(Duration.ofSeconds(30))
                                 .withTimestampAssigner((json, previousTimestamp) ->
                                         LibraryEvent.parse(json).eventTimeMillis()),
                         "library-events")

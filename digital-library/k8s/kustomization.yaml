@@ -9,5 +9,6 @@ resources:
   - availability.yaml
   - notification.yaml
   - fine.yaml
+  - frontend.yaml
   - hpa.yaml
   - ingress.yaml

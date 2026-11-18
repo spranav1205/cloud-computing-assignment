@@ -60,7 +60,13 @@ spec:
           volumeMounts:
             - name: temporary
               mountPath: /tmp
+            - name: rds-ca
+              mountPath: /etc/rds-ca
+              readOnly: true
       volumes:
+        - name: rds-ca
+          configMap:
+            name: rds-ca
         - name: temporary
           emptyDir:
             sizeLimit: 100Mi

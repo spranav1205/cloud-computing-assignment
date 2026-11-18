@@ -1,5 +1,11 @@
 # Checkpoint 8: user-run AWS testing, one approved step at a time
 
+**Historical checkpoint.** For the current terminal-run deployment and tests,
+use [DEPLOY.md](DEPLOY.md). Read-only checks on
+18 November 2026 found the `default` profile, IAM user `terraform-emr`, an active
+Paid account with $65.30 remaining credits, and no verified Mumbai SES sender.
+The old saved plan and identity examples below are not deployment inputs.
+
 Status: the user generated `infra/review.tfplan`; the agent inspected that saved
 file locally without AWS access. No apply, image publication, or deployment has
 been performed by the agent. The saved plan still needs the corrections below.

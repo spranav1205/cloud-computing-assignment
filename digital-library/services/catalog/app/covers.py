@@ -21,7 +21,7 @@ def local_s3(endpoint: str | None = None):
     if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "minio"}:
         raise ValueError("Only local MinIO HTTP endpoints are permitted")
     return boto3.client(
-        "s3", endpoint_url=endpoint, region_name="us-east-1",
+        "s3", endpoint_url=endpoint, region_name="ap-south-1",
         aws_access_key_id="local-library", aws_secret_access_key="local-library-password",
         config=Config(signature_version="s3v4", s3={"addressing_style": "path"},
                       connect_timeout=3, read_timeout=3, retries={"max_attempts": 0}),

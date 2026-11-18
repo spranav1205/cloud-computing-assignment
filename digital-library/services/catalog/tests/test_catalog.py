@@ -99,6 +99,6 @@ def test_database_failure(client, database, monkeypatch):
 
 
 def test_aws_endpoint_refused(monkeypatch):
-    monkeypatch.setenv("DYNAMODB_ENDPOINT_URL", "https://dynamodb.us-east-1.amazonaws.com")
+    monkeypatch.setenv("DYNAMODB_ENDPOINT_URL", "https://dynamodb.ap-south-1.amazonaws.com")
     with pytest.raises(ValueError, match="Only local"):
         local_resource()

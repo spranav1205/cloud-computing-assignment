@@ -1,4 +1,4 @@
-apiVersion: apps/v1
+﻿apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: kafka
@@ -14,27 +14,33 @@ spec:
     spec:
       containers:
         - name: kafka
-          image: bitnami/kafka:3.9
+          image: apache/kafka:3.9.1
           ports:
-            - name: broker
-              containerPort: 9092
+            - {name: broker, containerPort: 9092}
+            - {name: emr, containerPort: 9094}
           env:
-            - name: KAFKA_CFG_NODE_ID
-              value: "1"
-            - name: KAFKA_CFG_PROCESS_ROLES
-              value: broker,controller
-            - name: KAFKA_CFG_CONTROLLER_QUORUM_VOTERS
-              value: 1@kafka-0.kafka.library.svc.cluster.local:9093
-            - name: KAFKA_CFG_LISTENERS
-              value: PLAINTEXT://:9092,CONTROLLER://:9093
-            - name: KAFKA_CFG_ADVERTISED_LISTENERS
-              value: PLAINTEXT://kafka.library.svc.cluster.local:9092
-            - name: KAFKA_CFG_CONTROLLER_LISTENER_NAMES
-              value: CONTROLLER
-            - name: KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE
-              value: "false"
-            - name: KAFKA_CFG_NUM_PARTITIONS
-              value: "3"
+            - name: KAFKA_NODE_IP
+              valueFrom:
+                fieldRef: {fieldPath: status.hostIP}
+            - {name: CLUSTER_ID, value: "4L6g3nShT-eMCtK--X86sw"}
+            - {name: KAFKA_NODE_ID, value: "1"}
+            - {name: KAFKA_PROCESS_ROLES, value: "broker,controller"}
+            - {name: KAFKA_CONTROLLER_QUORUM_VOTERS, value: "1@kafka-0.kafka.library.svc.cluster.local:9093"}
+            - {name: KAFKA_LISTENERS, value: "PLAINTEXT://:9092,CONTROLLER://:9093,EMR://:9094"}
+            - {name: KAFKA_ADVERTISED_LISTENERS, value: "PLAINTEXT://kafka.library.svc.cluster.local:9092,EMR://$(KAFKA_NODE_IP):30094"}
+            - {name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP, value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EMR:PLAINTEXT"}
+            - {name: KAFKA_INTER_BROKER_LISTENER_NAME, value: PLAINTEXT}
+            - {name: KAFKA_CONTROLLER_LISTENER_NAMES, value: CONTROLLER}
+            - {name: KAFKA_AUTO_CREATE_TOPICS_ENABLE, value: "false"}
+            - {name: KAFKA_NUM_PARTITIONS, value: "3"}
+            - {name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR, value: "1"}
+            - {name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR, value: "1"}
+            - {name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR, value: "1"}
+            - {name: KAFKA_HEAP_OPTS, value: "-Xms256m -Xmx512m"}
+            - {name: KAFKA_LOG_DIRS, value: /tmp/kraft-combined-logs}
+          resources:
+            requests: {cpu: 250m, memory: 768Mi}
+            limits: {cpu: "1", memory: 1536Mi}
           readinessProbe:
             tcpSocket: {port: broker}
             periodSeconds: 10
@@ -48,9 +54,18 @@ spec:
   clusterIP: None
   selector: {app: kafka}
   ports:
-    - name: broker
-      port: 9092
-      targetPort: broker
+    - {name: broker, port: 9092, targetPort: broker}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-emr
+  namespace: library
+spec:
+  type: NodePort
+  selector: {app: kafka}
+  ports:
+    - {name: emr, port: 9094, targetPort: emr, nodePort: 30094}
 ---
 apiVersion: batch/v1
 kind: Job
@@ -58,15 +73,16 @@ metadata:
   name: kafka-topics
   namespace: library
 spec:
+  backoffLimit: 6
   template:
     spec:
       restartPolicy: OnFailure
       containers:
         - name: topics
-          image: bitnami/kafka:3.9
+          image: apache/kafka:3.9.1
           command: ["/bin/bash", "-ec"]
           args:
             - |
-              until kafka-topics.sh --bootstrap-server kafka.library.svc.cluster.local:9092 --list; do sleep 2; done
-              kafka-topics.sh --bootstrap-server kafka.library.svc.cluster.local:9092 --create --if-not-exists --topic library.events.v1 --partitions 3 --replication-factor 1
-              kafka-topics.sh --bootstrap-server kafka.library.svc.cluster.local:9092 --create --if-not-exists --topic library.analytics.results.v1 --partitions 3 --replication-factor 1
+              until /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list; do sleep 2; done
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic library.events.v1 --partitions 3 --replication-factor 1
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic library.analytics.results.v1 --partitions 3 --replication-factor 1

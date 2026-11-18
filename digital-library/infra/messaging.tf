@@ -1,6 +1,6 @@
 data "archive_file" "notification_lambda" {
   type        = "zip"
-  source_dir  = "${path.module}/../services/notification-lambda"
+  source_file = "${path.module}/../services/notification-lambda/handler.py"
   output_path = "${path.module}/.local/notification-lambda.zip"
 }
 

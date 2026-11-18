@@ -1,5 +1,12 @@
 # Digital Library Microservices
 
+**Current AWS terminal workflow:** see [DEPLOY.md](DEPLOY.md). Terraform owns
+infrastructure, `scripts/publish-images.ps1` builds and pushes ECR images, and
+Argo CD deploys the configured manifests. `python scripts/smoke_test.py` tests
+the seven APIs of a running stack, either locally or through port forwards.
+Older checkpoint notes below describe earlier verification, not the current
+deployment status. No AWS deployment has been performed by the agent.
+
 Member manages member identities in PostgreSQL. Catalog manages books and copy
 identities in DynamoDB and private cover images in S3-compatible storage. Both
 expose REST APIs, OpenAPI docs, `/health`, `/ready`, `/metrics`, and stdout logs.

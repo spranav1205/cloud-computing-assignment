@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: library
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: frontend}
+  template:
+    metadata:
+      labels: {app: frontend}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: frontend
+          image: library-frontend:local
+          ports:
+            - {name: http, containerPort: 4173}
+          env:
+            - {name: MEMBER_URL, value: "http://member"}
+            - {name: CATALOG_URL, value: "http://catalog"}
+            - {name: RESERVATION_URL, value: "http://reservation"}
+            - {name: NOTIFICATION_URL, value: "http://notification"}
+            - {name: FINE_URL, value: "http://fine"}
+            - {name: LENDING_URL, value: "http://lending"}
+            - {name: AVAILABILITY_URL, value: "http://availability"}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 250m, memory: 192Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: library
+spec:
+  type: ClusterIP
+  selector: {app: frontend}
+  ports:
+    - {name: http, port: 80, targetPort: http}
