@@ -38,7 +38,7 @@ docker run --rm --volume "${workspacePath}:/workspace:ro" --workdir /workspace p
 ```
 
 `kubectl kustomize` only renders local files. The Python validator uses bundled
-Kubernetes 1.35.0 schemas and strict unknown-field checks. It validates all sixteen
+Kubernetes 1.35.0 schemas and strict unknown-field checks. It validates all twenty
 resources, with no skips or cluster access. Choose the schema version matching the
 approved EKS version when that decision is made. This is syntax/schema validation,
 not an EKS runtime test. Do not run `kubectl apply`, even as a server-side dry run,
@@ -50,9 +50,9 @@ against the final cluster during this checkpoint.
 | --- | --- |
 | GitOps source path | `digital-library/k8s`, plain Kustomize; team supplies repository URL/revision |
 | Namespace | `library` |
-| Workloads | `member`, `catalog`, `reservation`, `notification`, and `fine`, one replica each, ClusterIP only |
-| Service addresses | `member.library.svc.cluster.local:80`, `catalog.library.svc.cluster.local:80`, `reservation.library.svc.cluster.local:80`, `notification.library.svc.cluster.local:80`, `fine.library.svc.cluster.local:80` |
-| Runtime ports | Member 8001, Catalog 8002; named `http` ports |
+| Workloads | `member`, `catalog`, `reservation`, `lending`, `availability`, `notification`, and `fine`, one replica each, ClusterIP only |
+| Service addresses | `member.library.svc.cluster.local:80`, `catalog.library.svc.cluster.local:80`, `reservation.library.svc.cluster.local:80`, `lending.library.svc.cluster.local:80`, `availability.library.svc.cluster.local:80`, `notification.library.svc.cluster.local:80`, `fine.library.svc.cluster.local:80` |
+| Runtime ports | Member 8001, Catalog 8002, Reservation 8003, Notification 8004, Fine 8005, Lending 8006, Availability 8007; named `http` ports |
 | Probes | `/health` for startup/liveness, `/ready` for storage readiness |
 | Monitoring handoff | `/metrics`, scrape annotations, stdout logs; Member 4 owns collection |
 | Catalog IAM | Service account `library/catalog`, IRSA annotation from Terraform `catalog.role_arn` |
@@ -60,7 +60,7 @@ against the final cluster during this checkpoint.
 | Reservation secret | Existing `reservation-database` Secret, key `url`; no credentials in Git |
 | RDS CA | Existing `rds-ca` ConfigMap with public certificate key `global-bundle.pem` |
 
-Both Deployments specify requests/limits, non-root execution, a read-only root
+All Deployments specify requests/limits, non-root execution, a read-only root
 filesystem, dropped Linux capabilities, no privilege escalation, and a temporary
 volume. Member has no mounted Kubernetes service-account token. Catalog keeps
 service-account identity for IRSA and disables EC2 metadata credential fallback.
@@ -72,13 +72,21 @@ Fine reads the shared lending database using the externally managed
 the `loans` table. The URL must use `sslmode=verify-full` and
 `sslrootcert=/etc/rds-ca/global-bundle.pem`; the pod mounts the existing `rds-ca`
 ConfigMap. Set `FINE_PER_DAY_CENTS` to the agreed daily rate before sync.
+Lending uses the externally managed `lending-database` Secret (`url` key) and
+requires permission to create and maintain the `loans` table. Availability uses
+the `availability-database` Secret (`url` key) with read-only access to `loans`
+and `reservations`; both mount the same `rds-ca` ConfigMap and require verified
+TLS URLs with `sslmode=verify-full` and
+`sslrootcert=/etc/rds-ca/global-bundle.pem`. Lending's `/ready` endpoint also
+checks Member, Catalog, and Reservation service readiness. Its Kubernetes
+service URLs and the Availability Catalog URL are configured in the manifests.
 There is no HPA, ArgoCD Application, ingress, load balancer, monitoring stack, or
 Flink/EMR workload in these files. Usage Analytics runs as a Flink job on the
 managed EMR cluster, not as an EKS deployment.
 
 Before the first approved sync, Member 3 must review/replace:
 
-1. Both image references with approved registry references pinned to the built
+1. Image references with approved registry references pinned to the built
    image digest. The placeholder local tags are not pullable from EKS.
 2. Catalog's placeholder IRSA role ARN, bucket name, region, and table names using
    the approved Terraform outputs. Do not include static AWS keys.
@@ -121,8 +129,9 @@ cloud-mode ConfigMaps.
 Both production-dependency images built and ran healthy locally. The end-to-end
 Member + Catalog + private-cover workflow passed against the packaged images.
 All **55 service tests** passed (22 Member, 33 Catalog), zero skipped; cloud
-configuration tests mocked SDK construction. All **9 Kubernetes resources** passed
-strict bundled schema validation. The revised Terraform configuration validated
+configuration tests mocked SDK construction. The earlier **16 Kubernetes
+resources** passed strict bundled schema validation; rerun validation after
+including Lending and Availability. The revised Terraform configuration validated
 and all **3 mock-provider tests** passed. The existing upstream Starlette/httpx
 deprecation warning remains non-failing.
 

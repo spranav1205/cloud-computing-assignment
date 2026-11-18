@@ -2,25 +2,28 @@
 
 This document records the agreed service boundaries and implementation notes.
 The current task division assigns Member and Catalog to Pranav; Reservation and
-Notification to Nishant; and Usage Analytics and Fine Calculation to Shantnu.
-This implementation includes Shantnu's two service deliverables alongside the
-existing services.
+Notification to Nishant; Lending and Availability to Neha; and Usage Analytics
+and Fine Calculation to Shantnu. This implementation includes all assigned
+service deliverables.
 
 ## Scope
 
 Member and Catalog remain scoped to their assigned services and infrastructure.
-The Usage Analytics and Fine Calculation services are separate assignments:
-Usage Analytics consumes lending/reservation events, while Fine Calculation
-reads the Lending service's authoritative `loans` table. Neither service owns
-loan, reservation, or catalog records.
+Lending owns the authoritative `loans` table and coordinates checkout/return
+with Member, Catalog, and Reservation APIs. Availability is a read-only
+projection of Catalog copies, active loans, and ready reservations. Usage
+Analytics consumes lending/reservation events, while Fine Calculation reads
+Lending's `loans` table. Neither of those services owns loan, reservation, or
+catalog records.
 
 Where the starter design conflicts with the agreed task division, use the current assignment: **Member records in PostgreSQL; books and copies in DynamoDB; covers in S3**. Other services access these through APIs.
 
 ## Stack and structure
 
-- Python + FastAPI for Member, Catalog, Reservation, Notification, and Fine
-  Calculation. Usage Analytics is a Java 17 Flink job with a Kafka connector.
-- PostgreSQL for members (SQLAlchemy is sufficient).
+- Python + FastAPI for Member, Catalog, Reservation, Lending, Availability,
+  Notification, and Fine Calculation. Usage Analytics is a Java 17 Flink job
+  with a Kafka connector.
+- PostgreSQL for members, reservations, and loans (SQLAlchemy is sufficient).
 - DynamoDB for books and copies (boto3).
 - S3 for book-cover objects; MinIO for local testing.
 - Terraform for assigned AWS resources; Docker and Kubernetes for deployment.
@@ -37,6 +40,20 @@ Where the starter design conflicts with the agreed task division, use the curren
   publishes per-book one-minute event-time aggregates to a separate results
   topic. Its event and output schemas are in the
   [job guide](services/usage-analytics/README.md).
+
+## Neha's service contracts
+
+- **Lending:** `POST /loans` checks that the reservation is READY and belongs to
+  the member, verifies the member and that the copy belongs to the reserved
+  book, then records an active loan with a configurable due date. `GET /loans`
+  and `GET /loans/{id}` expose loan records. `POST /loans/{id}/return` records
+  the return time and cancels the reservation, allowing Reservation to promote
+  the next waiter. The default loan period is 14 days.
+- **Availability:** `GET /books/{id}/availability` obtains copy identities from
+  Catalog and reads active loans and READY reservations from PostgreSQL. It
+  excludes a READY reservation already associated with an active loan, so the
+  checkout hold is not counted twice. Availability does not own or modify these
+  records.
 
 Keep the code small: routes, data models, and database access. Split files only when they become difficult to maintain. Do not build a generic repository framework, shared application framework, or unnecessary abstractions.
 

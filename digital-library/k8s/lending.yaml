@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lending
+  namespace: library
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: lending}
+  template:
+    metadata:
+      labels: {app: lending}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "8006"
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: lending
+          image: library-lending:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8006
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: lending-database
+                  key: url
+            - name: LOAN_PERIOD_DAYS
+              value: "14"
+            - name: MEMBER_URL
+              value: http://member:80
+            - name: CATALOG_URL
+              value: http://catalog:80
+            - name: RESERVATION_URL
+              value: http://reservation:80
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          startupProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 3
+            failureThreshold: 20
+          readinessProbe:
+            httpGet: {path: /ready, port: http}
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+          volumeMounts:
+            - name: temporary
+              mountPath: /tmp
+            - name: rds-ca
+              mountPath: /etc/rds-ca
+              readOnly: true
+      volumes:
+        - name: temporary
+          emptyDir:
+            sizeLimit: 100Mi
+        - name: rds-ca
+          configMap:
+            name: rds-ca
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lending
+  namespace: library
+spec:
+  selector: {app: lending}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

@@ -10,6 +10,11 @@ the Lending service's loan records and Usage Analytics processes Kafka events
 with a Flink job. See [Usage Analytics](services/usage-analytics/README.md) for
 the event contract and EMR submission steps.
 
+Neha's Lending service validates reservations, members, and catalog copies before
+checkout, records loan due dates, and cancels reservations on return. Availability
+derives copy counts from Catalog, active loans, and ready reservations without
+owning or changing those records.
+
 Implementation and packaging were tested locally. The user-generated saved AWS
 plan has been inspected, but the agent has not provisioned resources. See
 [AWS testing](AWS_TESTING.md) before considering an apply.
@@ -32,18 +37,20 @@ docker compose up --build -d --wait --wait-timeout 600
 docker compose ps
 ```
 
-This starts the Member, Catalog, Reservation, Fine Calculation, and Notification APIs, PostgreSQL,
-DynamoDB Local, and MinIO. Separate initialization
-jobs install development dependencies into named Python volumes, initialize tables,
-and configure a private cover bucket and restricted MinIO user. Exit code 0 for
-these jobs is expected. API startup itself does not create tables. Initialization
-preserves existing tables but does not migrate an existing schema.
+This starts the Member, Catalog, Reservation, Lending, Availability, Fine
+Calculation, and Notification APIs, PostgreSQL, DynamoDB Local, and MinIO.
+Separate initialization jobs install development dependencies into named Python
+volumes, initialize Member/Catalog storage, and configure a private cover bucket
+and restricted MinIO user. Exit code 0 for these jobs is expected. Lending
+creates its `loans` table at startup; other services follow their documented
+initialization behavior. Initialization preserves existing tables but does not
+migrate an existing schema.
 
 The first run downloads public images/dependencies and builds MinIO from approved,
 pinned official sources. Subsequent runs reuse Docker caches. No AWS credentials
 are needed: local SDK clients use dummy credentials and reject remote emulator
 endpoints. Published ports bind to loopback. Stop host API processes on ports
-8001/8002 before starting their Compose replacements.
+8001-8007 before starting their Compose replacements.
 
 | Service | Local address |
 | --- | --- |
@@ -52,11 +59,13 @@ endpoints. Published ports bind to loopback. Stop host API processes on ports
 | Reservation API / docs | http://127.0.0.1:8003/docs |
 | Notification API / docs | http://127.0.0.1:8004/docs |
 | Fine Calculation API / docs | http://127.0.0.1:8005/docs |
+| Lending API / docs | http://127.0.0.1:8006/docs |
+| Availability API / docs | http://127.0.0.1:8007/docs |
 | PostgreSQL | 127.0.0.1:5432 |
 | DynamoDB Local | http://127.0.0.1:8000 |
 | MinIO S3 / console | http://127.0.0.1:9000 / http://127.0.0.1:9001 |
 
-For startup problems, inspect `docker compose logs member-init catalog-init minio-init member catalog reservation notification`.
+For startup problems, inspect `docker compose logs member-init catalog-init minio-init member catalog reservation lending availability notification`.
 To use packaged non-root images with read-only filesystems and no source mounts:
 
 ```powershell
@@ -75,6 +84,11 @@ and `AWS_REGION` only when connecting it to an approved SQS queue.
 Fine Calculation reads the `loans` table without creating or migrating it; it
 returns 404 until a Lending service has created the requested loan. Its default
 rate is 100 cents per overdue day and can be changed with `FINE_PER_DAY_CENTS`.
+Lending creates the `loans` table on startup and uses a 14-day loan period by
+default; configure `LOAN_PERIOD_DAYS` to change it. Availability reads the
+`loans` and `reservations` tables and obtains copy identities from Catalog.
+Active loans and READY reservations reduce the available-copy count;
+WAITLISTED reservations do not.
 
 ## Tests
 
@@ -87,6 +101,21 @@ docker compose exec -T postgres createdb -U library member_test
 docker compose exec -T -e TEST_DATABASE_URL=postgresql+psycopg://library:local-password@postgres:5432/member_test member /venv/bin/python -m pytest -q -p no:cacheprovider
 docker compose exec -T -e S3_PUBLIC_ENDPOINT_URL=http://minio:9000 catalog /venv/bin/python -m pytest -q -p no:cacheprovider
 ```
+
+Run each service's tests from its directory after installing
+`requirements-dev.txt`:
+
+```powershell
+Set-Location .\services\lending
+python -m pip install -r requirements-dev.txt
+python -m pytest -q -p no:cacheprovider
+Set-Location ..\availability
+python -m pip install -r requirements-dev.txt
+python -m pytest -q -p no:cacheprovider
+```
+
+Both test suites use isolated SQLite databases and mock their HTTP dependencies;
+they do not require AWS or a running Compose stack.
 
 Member tests cover HTTP behavior and actual PostgreSQL uniqueness/rollback. They
 clear only the test database's members table, not demonstration records in `library`.
@@ -140,6 +169,18 @@ later requests are FIFO `WAITLISTED`. Cancelling a ready reservation promotes th
 oldest waiter while a per-book coordinator prevents concurrent allocation. Local
 mode uses an in-process lock; set `ZOOKEEPER_HOSTS` to use ZooKeeper locks.
 
+Lending supports `POST /loans`, `GET /loans/{id}`, `GET /loans` with optional
+`book_id`, `member_id`, `active_only`, `limit`, and `offset` filters, and
+`POST /loans/{id}/return`. Checkout requires a READY reservation belonging to
+the member and a copy belonging to that reservation's book. An active copy can
+have only one loan. Return is idempotent and cancels the reservation so the
+Reservation service can promote its next waiter.
+
+Availability supports `GET /books/{id}/availability` and returns
+`total_copies`, `loaned_copies`, `reserved_copies`, and `available_copies`.
+Ready holds without an assigned copy reserve otherwise unallocated copies;
+holds already represented by an active loan are not counted twice.
+
 Fine Calculation supports `GET /loans/{id}/fine`. It assesses the loan through
 its return timestamp, or the current UTC time if it remains open. Any partial
 overdue day is charged as a full day. The response expresses money in integer
@@ -187,7 +228,11 @@ Terraform tests**, and packaged-image integration. For Shantnu's services,
 resources**, and Docker Compose configuration validation passed. The Flink job
 builds as a shaded jar; a live Kafka/EMR run has not been performed and no cloud
 resources were provisioned. Real EKS/IRSA/RDS connectivity and GitOps
-reconciliation remain unverified.
+reconciliation remain unverified. Neha's services add focused Lending and
+Availability tests, and their Compose configuration and 20-resource Kustomize
+render passed. The tests and strict Kubernetes schema validation could not be
+run in this environment because the Docker daemon is unavailable and pytest
+dependencies are not installed.
 
 AWS mode is explicit (`APP_ENV=aws`); local mode is the default. Cloud prerequisites,
 image publication, RDS TLS/Secret delivery, and Member 3's GitOps handoff are in

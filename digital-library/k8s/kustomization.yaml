@@ -5,5 +5,7 @@ resources:
   - member.yaml
   - catalog.yaml
   - reservation.yaml
+  - lending.yaml
+  - availability.yaml
   - notification.yaml
   - fine.yaml
