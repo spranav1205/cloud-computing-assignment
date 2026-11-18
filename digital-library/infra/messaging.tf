@@ -21,6 +21,35 @@ resource "aws_sqs_queue" "notification" {
   })
 }
 
+resource "aws_iam_role" "notification_api" {
+  name = "${local.name}-notification-api"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Principal = { Federated = aws_iam_openid_connect_provider.eks.arn }
+      Condition = { StringEquals = {
+        "${trimprefix(aws_iam_openid_connect_provider.eks.url, "https://")}:aud" = "sts.amazonaws.com"
+        "${trimprefix(aws_iam_openid_connect_provider.eks.url, "https://")}:sub" = "system:serviceaccount:library:notification"
+      } }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "notification_api" {
+  name = "notification-publish"
+  role = aws_iam_role.notification_api.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["sqs:SendMessage"]
+      Resource = aws_sqs_queue.notification.arn
+    }]
+  })
+}
+
 resource "aws_iam_role" "notification_lambda" {
   name = "${local.name}-notification-lambda"
   assume_role_policy = jsonencode({
@@ -86,4 +115,5 @@ resource "aws_lambda_event_source_mapping" "notification" {
   batch_size              = 10
   function_response_types = ["ReportBatchItemFailures"]
   enabled                 = true
+  depends_on              = [aws_iam_role_policy.notification_lambda]
 }

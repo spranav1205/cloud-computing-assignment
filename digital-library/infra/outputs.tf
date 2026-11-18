@@ -44,6 +44,7 @@ output "event_driven_notification" {
     queue_url       = aws_sqs_queue.notification.url
     dead_letter_arn = aws_sqs_queue.notification_dlq.arn
     lambda_name     = aws_lambda_function.notification.function_name
+    api_role_arn    = aws_iam_role.notification_api.arn
   }
 }
 

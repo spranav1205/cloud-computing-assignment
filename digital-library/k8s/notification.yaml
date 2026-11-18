@@ -3,6 +3,8 @@ kind: ServiceAccount
 metadata:
   name: notification
   namespace: library
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::111111111111:role/REPLACE-WITH-TERRAFORM-NOTIFICATION-ROLE
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -32,6 +34,8 @@ spec:
             - name: http
               containerPort: 8004
           env:
+            - name: AWS_EC2_METADATA_DISABLED
+              value: "true"
             - name: AWS_REGION
               valueFrom:
                 configMapKeyRef:

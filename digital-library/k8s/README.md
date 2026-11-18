@@ -1,5 +1,9 @@
 # Final Kubernetes packaging and GitOps handoff
 
+For the current image/config preparation and database bootstrap procedure, see
+[AWS runtime setup](../AWS_SETUP.md). Member now has a schema init container;
+older checkpoint notes below about initialization refer to the local API images.
+
 These files are reviewable deployment inputs, not a deployment. No image was
 published, no Kubernetes cluster was contacted, and no AWS plan or operation ran.
 Argo CD owns the application sync; HPAs, ingress, platform services, and

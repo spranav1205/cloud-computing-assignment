@@ -1,5 +1,8 @@
 ﻿# Build, publish, deploy, verify
 
+Follow [the current AWS runtime setup](AWS_SETUP.md) before the first cloud sync;
+it supersedes historical credential/state and deployment-prerequisite notes below.
+
 Use the tools already in the repository for their own jobs:
 
 1. Terraform provisions AWS resources, including the ECR repositories.

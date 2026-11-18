@@ -53,3 +53,5 @@ kind: ServiceAccount
 metadata:
   name: fluent-bit
   namespace: library
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::111111111111:role/REPLACE-WITH-TERRAFORM-FLUENT-BIT-ROLE

@@ -12,38 +12,46 @@ spec:
   rules:
     - http:
         paths:
-          - path: /members
-            pathType: Prefix
+          # Keep these ALB patterns in order: availability must precede Catalog.
+          - path: /books/*/availability
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: availability
+                port:
+                  name: http
+          - path: /members*
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: member
                 port:
                   name: http
-          - path: /books
-            pathType: Prefix
+          - path: /books*
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: catalog
                 port:
                   name: http
-          - path: /reservations
-            pathType: Prefix
+          - path: /reservations*
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: reservation
                 port:
                   name: http
-          - path: /loans
-            pathType: Prefix
+          - path: /loans*
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: lending
                 port:
                   name: http
-          - path: /availability
-            pathType: Prefix
+          - path: /*
+            pathType: ImplementationSpecific
             backend:
               service:
-                name: availability
+                name: frontend
                 port:
                   name: http

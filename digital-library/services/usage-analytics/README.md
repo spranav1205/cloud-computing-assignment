@@ -1,8 +1,8 @@
 # Usage Analytics Flink Job
 
-The job reads domain events from Kafka topic `library.events`, computes keyed
+The job reads domain events from Kafka topic `library.events.v1`, computes keyed
 one-minute event-time aggregates per book, and writes JSON results to the
-separate `library.analytics.results` topic. It uses Flink's incremental window
+separate `library.analytics.results.v1` topic. It uses Flink's incremental window
 aggregate and retains a set of member IDs for each active book/window to count
 distinct borrowers/reservers.
 
@@ -52,8 +52,8 @@ network access to Kafka:
 
 ```sh
 export KAFKA_BOOTSTRAP_SERVERS='broker1:9092,broker2:9092'
-export KAFKA_INPUT_TOPIC='library.events'
-export KAFKA_RESULTS_TOPIC='library.analytics.results'
+export KAFKA_INPUT_TOPIC='library.events.v1'
+export KAFKA_RESULTS_TOPIC='library.analytics.results.v1'
 export KAFKA_CONSUMER_GROUP='library-usage-analytics'
 export KAFKA_CLIENT_PROPERTIES='{}'
 flink run -m yarn-cluster -d \
