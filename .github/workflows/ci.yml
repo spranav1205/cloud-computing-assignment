@@ -20,7 +20,39 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -r requirements-dev.txt
+      - name: Start Catalog test storage
+        if: matrix.service == 'catalog'
+        run: |
+          docker compose -f ../../compose.yaml up --build -d dynamodb minio
+          docker compose -f ../../compose.yaml run --rm minio-init
+      - name: Wait for Catalog test storage
+        if: matrix.service == 'catalog'
+        run: |
+          python - <<'PY'
+          from time import monotonic, sleep
+          from app.database import local_resource
+          from app.covers import local_s3
+
+          dynamodb, s3 = local_resource(), local_s3()
+          deadline = monotonic() + 60
+          try:
+              while True:
+                  try:
+                      dynamodb.meta.client.list_tables()
+                      s3.head_bucket(Bucket="library-covers")
+                      break
+                  except Exception:
+                      if monotonic() >= deadline:
+                          raise
+                      sleep(1)
+          finally:
+              dynamodb.meta.client.close()
+              s3.close()
+          PY
       - run: python -m pytest -q -p no:cacheprovider
+      - name: Catalog storage diagnostics
+        if: failure() && matrix.service == 'catalog'
+        run: docker compose -f ../../compose.yaml logs --tail=100 dynamodb minio
 
   flink-tests:
     runs-on: ubuntu-latest
