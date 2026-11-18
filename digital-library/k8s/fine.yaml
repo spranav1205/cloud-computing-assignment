@@ -23,7 +23,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: fine
-          image: library-fine:local
+          image: "380560899065.dkr.ecr.ap-south-1.amazonaws.com/digital-library-dev/fine@sha256:a330855d55dbafcc988bfe64d7ba645de095da6cf90b31910e3e2af481de01e1"
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

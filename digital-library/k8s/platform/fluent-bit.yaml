@@ -38,7 +38,7 @@ spec:
           image: public.ecr.aws/aws-observability/aws-for-fluent-bit:2.32.0
           env:
             - name: AWS_REGION
-              value: ap-south-1
+              value: "ap-south-1"
           volumeMounts:
             - {name: varlog, mountPath: /var/log}
             - {name: config, mountPath: /fluent-bit/etc/fluent-bit.conf, subPath: fluent-bit.conf}
@@ -53,3 +53,5 @@ kind: ServiceAccount
 metadata:
   name: fluent-bit
   namespace: library
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::380560899065:role/digital-library-dev-fluent-bit"
