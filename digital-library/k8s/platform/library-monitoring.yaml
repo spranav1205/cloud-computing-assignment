@@ -1,0 +1,46 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: library-services
+  namespace: observability
+  labels:
+    release: library-observability
+spec:
+  namespaceSelector:
+    matchNames: [library]
+  selector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [member, catalog, lending, availability, fine]
+  podTargetLabels: [app]
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: library-live-dashboard
+  namespace: observability
+  labels:
+    grafana_dashboard: "1"
+data:
+  library-live.json: |
+    {
+      "uid": "library-services-live",
+      "title": "Digital Library Live Metrics",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "15s",
+      "time": {"from": "now-30m", "to": "now"},
+      "panels": [
+        {"id":1,"type":"stat","title":"Services being scraped","gridPos":{"h":5,"w":24,"x":0,"y":0},"targets":[{"expr":"sum by (app) (up{namespace=\"library\",app=~\"member|catalog|lending|availability|fine\"})","legendFormat":"{{app}}","refId":"A"}]},
+        {"id":2,"type":"timeseries","title":"HTTP requests per second","gridPos":{"h":8,"w":12,"x":0,"y":5},"targets":[{"expr":"sum by (app) (rate({__name__=~\".+_http_requests_total\",namespace=\"library\"}[5m]))","legendFormat":"{{app}}","refId":"A"}]},
+        {"id":3,"type":"timeseries","title":"HTTP 5xx errors per second","gridPos":{"h":8,"w":12,"x":12,"y":5},"targets":[{"expr":"sum by (app) (rate({__name__=~\".+_http_requests_total\",namespace=\"library\",status=~\"5..\"}[5m]))","legendFormat":"{{app}}","refId":"A"}]},
+        {"id":4,"type":"timeseries","title":"HTTP latency p95 (seconds)","gridPos":{"h":8,"w":12,"x":0,"y":13},"targets":[{"expr":"histogram_quantile(0.95, sum by (app, le) (rate({__name__=~\".+_http_request_duration_seconds_bucket\",namespace=\"library\"}[5m])))","legendFormat":"{{app}}","refId":"A"}]},
+        {"id":5,"type":"timeseries","title":"Cluster CPU cores used","gridPos":{"h":8,"w":12,"x":12,"y":13},"targets":[{"expr":"sum(rate(container_cpu_usage_seconds_total{container!=\"\",container!=\"POD\"}[5m]))","legendFormat":"CPU cores","refId":"A"}]}
+      ]
+    }

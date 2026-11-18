@@ -9,7 +9,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/spranav1205/cloud-computing-assignment.git
-    targetRevision: main
+    targetRevision: deploy/deploy-20261118203335
     path: digital-library/k8s/platform
   destination:
     server: https://kubernetes.default.svc
