@@ -25,7 +25,7 @@ class ReservationStore:
     def __init__(self, engine: Engine):
         self.engine = engine
 
-    def create(self, data: ReservationCreate, ready: bool) -> Reservation:
+    def create(self, data: ReservationCreate, ready: bool, copy_id: UUID | None = None) -> Reservation:
         with Session(self.engine) as session:
             duplicate = session.scalar(
                 select(Reservation).where(
@@ -47,6 +47,7 @@ class ReservationStore:
                 member_id=data.member_id,
                 status=ReservationStatus.READY if ready and active == 0 else ReservationStatus.WAITLISTED,
                 queue_position=(active or 0) + 1,
+                copy_id=copy_id if ready and active == 0 else None,
             )
             session.add(reservation)
             session.commit()
@@ -56,6 +57,16 @@ class ReservationStore:
     def get(self, reservation_id: UUID) -> Reservation | None:
         with Session(self.engine) as session:
             return session.get(Reservation, reservation_id)
+
+    def list_for_member(self, member_id: UUID, limit: int, offset: int) -> tuple[list[Reservation], int]:
+        statement = select(Reservation).where(Reservation.member_id == member_id)
+        count_statement = select(func.count()).select_from(Reservation).where(Reservation.member_id == member_id)
+        with Session(self.engine) as session:
+            items = session.scalars(
+                statement.order_by(Reservation.created_at.desc(), Reservation.reservation_id)
+                .limit(limit).offset(offset)
+            ).all()
+            return items, session.scalar(count_statement) or 0
 
     def cancel(self, reservation_id: UUID) -> Reservation | None:
         with Session(self.engine) as session:
@@ -78,6 +89,7 @@ class ReservationStore:
                 )
                 if next_reservation:
                     next_reservation.status = ReservationStatus.READY
+                    next_reservation.copy_id = reservation.copy_id
             session.commit()
             session.refresh(reservation)
             return reservation

@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class NotificationEvent(BaseModel):
@@ -13,8 +13,10 @@ class NotificationEvent(BaseModel):
     event_type: Literal[
         "ReservationReady", "AvailabilityChanged", "DueDateReminder", "LoanReturned"
     ]
+    recipient: EmailStr
+    subject: str = Field(default="Digital Library notification", min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=1000)
     member_id: UUID
-    message: str = Field(min_length=1, max_length=1000)
     occurred_at: datetime
 
 

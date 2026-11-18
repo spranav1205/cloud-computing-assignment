@@ -138,8 +138,14 @@ services:
     build: ./services/reservation
     environment:
       DATABASE_URL: postgresql+psycopg://library:local-password@postgres:5432/library
+      MEMBER_URL: http://member:8001
+      AVAILABILITY_URL: http://availability:8007
     depends_on:
       postgres:
+        condition: service_healthy
+      member:
+        condition: service_healthy
+      catalog:
         condition: service_healthy
     ports:
       - "127.0.0.1:8003:8003"
@@ -203,6 +209,8 @@ services:
       FINE_PER_DAY_CENTS: "100"
     depends_on:
       postgres:
+        condition: service_healthy
+      lending:
         condition: service_healthy
     ports:
       - "127.0.0.1:8005:8005"

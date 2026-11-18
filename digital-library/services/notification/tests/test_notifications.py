@@ -14,8 +14,10 @@ def test_notification_is_queued():
             "/notifications",
             json={
                 "event_type": "ReservationReady",
+                "recipient": "member@example.com",
+                "subject": "Reservation ready",
+                "body": "Your reservation is ready",
                 "member_id": str(uuid4()),
-                "message": "Your reservation is ready",
                 "occurred_at": datetime.now(timezone.utc).isoformat(),
             },
         )

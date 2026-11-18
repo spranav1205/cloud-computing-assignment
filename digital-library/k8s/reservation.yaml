@@ -30,6 +30,12 @@ spec:
                 secretKeyRef:
                   name: reservation-database
                   key: url
+            - name: MEMBER_URL
+              value: http://member
+            - name: AVAILABILITY_URL
+              value: http://availability
+            - name: ZOOKEEPER_HOSTS
+              value: zookeeper-0.zookeeper:2181,zookeeper-1.zookeeper:2181,zookeeper-2.zookeeper:2181
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

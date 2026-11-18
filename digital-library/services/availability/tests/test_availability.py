@@ -91,13 +91,14 @@ def test_availability_deducts_loans_and_holds_but_not_waitlist(database):
         response = client.get(f"/books/{book_id}/availability")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "book_id": str(book_id),
-        "total_copies": 4,
-        "loaned_copies": 1,
-        "reserved_copies": 2,
-        "available_copies": 1,
-    }
+    payload = response.json()
+    assert payload["book_id"] == str(book_id)
+    assert payload["total_copies"] == 4
+    assert payload["loaned_copies"] == 1
+    assert payload["reserved_copies"] == 2
+    assert payload["available_copies"] == 1
+    assert len(payload["available_copy_ids"]) == 1
+    assert payload["available_copy_ids"][0] not in {str(loaned_copy), str(ready_copy)}
 
 
 @pytest.mark.parametrize(

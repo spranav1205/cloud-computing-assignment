@@ -69,6 +69,8 @@ class LendingDependencies:
             book_id = UUID(reservation["book_id"])
         except (KeyError, TypeError, ValueError) as error:
             raise LendingDependencyError("Reservation service returned an invalid reservation") from error
+        if reservation.get("copy_id") != str(data.copy_id):
+            raise CheckoutConflict("Checkout copy does not match the reservation allocation")
 
         if self.member_grpc is not None:
             self._check_member_grpc(data.member_id, data.copy_id)

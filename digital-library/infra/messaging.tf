@@ -51,6 +51,11 @@ resource "aws_iam_role_policy" "notification_lambda" {
       },
       {
         Effect   = "Allow"
+        Action   = ["dynamodb:PutItem", "dynamodb:DeleteItem"]
+        Resource = aws_dynamodb_table.notification_dedupe.arn
+      },
+      {
+        Effect   = "Allow"
         Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
         Resource = "arn:aws:logs:${var.aws_region}:${var.aws_account_id}:*"
       }
@@ -69,7 +74,8 @@ resource "aws_lambda_function" "notification" {
   memory_size      = 256
   environment {
     variables = {
-      SES_SENDER = var.ses_sender
+      SES_SENDER                = var.ses_sender
+      NOTIFICATION_DEDUPE_TABLE = aws_dynamodb_table.notification_dedupe.name
     }
   }
 }

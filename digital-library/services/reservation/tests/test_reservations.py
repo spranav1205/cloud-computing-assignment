@@ -34,3 +34,39 @@ def test_duplicate_active_reservation_is_rejected(tmp_path):
         payload = {"book_id": str(uuid4()), "member_id": str(uuid4())}
         assert api.post("/reservations", json=payload).status_code == 201
         assert api.post("/reservations", json=payload).status_code == 409
+
+
+def test_member_can_list_reservations_from_backend(tmp_path):
+    with client(tmp_path) as api:
+        member_id = uuid4()
+        book_id = uuid4()
+        api.post("/reservations", json={"book_id": str(book_id), "member_id": str(member_id)})
+
+        response = api.get("/reservations", params={"member_id": str(member_id)})
+
+        assert response.status_code == 200
+        assert response.json()["total"] == 1
+        assert response.json()["items"][0]["member_id"] == str(member_id)
+
+
+class FakeDependencies:
+    def __init__(self, copy_id):
+        self.copy_id = copy_id
+
+    def validate(self, data):
+        return self.copy_id
+
+    def ready(self):
+        return None
+
+
+def test_dependency_allocates_copy_for_ready_reservation(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'reservation.db'}")
+    initialize_database(engine)
+    copy_id = uuid4()
+    with TestClient(create_app(ReservationStore(engine), dependencies=FakeDependencies(copy_id))) as api:
+        response = api.post("/reservations", json={"book_id": str(uuid4()), "member_id": str(uuid4())})
+
+    assert response.status_code == 201
+    assert response.json()["status"] == "READY"
+    assert response.json()["copy_id"] == str(copy_id)

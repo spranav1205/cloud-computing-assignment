@@ -55,3 +55,10 @@ class ReservationResponse(BaseModel):
     queue_position: int
     copy_id: UUID | None
     created_at: datetime
+
+
+class ReservationPage(BaseModel):
+    items: list[ReservationResponse]
+    total: int
+    limit: int
+    offset: int

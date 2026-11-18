@@ -48,32 +48,10 @@ $("#togglePassword").addEventListener("click", () => {
 });
 
 async function signIn(name, email) {
-  const fallbackMember = {
-    member_id: "00000000-0000-4000-8000-000000000001",
-    name,
-    email
-  };
-  let member = fallbackMember;
-
-  // Reveal the signed-in experience first. API lookup failures must never
-  // leave a member stranded on the login screen.
-  state.member = member;
-  localStorage.setItem("bibliothecaMember", JSON.stringify(member));
-  $("#loginScreen").hidden = true;
-  $("#appShell").hidden = false;
-  $("#memberInitials").textContent = initials(member.name);
-  $("#accountMonogram").textContent = initials(member.name);
-  $("#accountName").textContent = member.name;
-  $("#accountEmail").textContent = member.email;
-
-  try {
-    const members = await api("/member/members?limit=100&offset=0");
-    member = (members.items || []).find(item => item.email.toLowerCase() === email.toLowerCase()) || null;
-    if (!member) {
-      member = await api("/member/members", { method:"POST", body:JSON.stringify({name,email}) });
-    }
-  } catch {
-    member = fallbackMember;
+  const members = await api("/member/members?limit=100&offset=0");
+  let member = (members.items || []).find(item => item.email.toLowerCase() === email.toLowerCase()) || null;
+  if (!member) {
+    member = await api("/member/members", { method:"POST", body:JSON.stringify({name,email}) });
   }
 
   state.member = member;
@@ -110,29 +88,10 @@ $("#signOutButton").addEventListener("click", () => {
 $("#accountButton").addEventListener("click", () => switchView("account"));
 
 async function loadCatalog() {
-  try {
-    let page = await api("/catalog/books?limit=100");
-    if (!page.items || page.items.length === 0) await seedCatalog();
-    page = await api("/catalog/books?limit=100");
-    state.books = page.items || [];
-  } catch {
-    state.books = featuredCatalog.map((book, index) => ({ ...book, book_id:`demo-${index}`, isbn:null }));
-  }
+  const page = await api("/catalog/books?limit=100");
+  state.books = page.items || [];
   renderBooks(state.books);
   showFeature(state.featuredIndex);
-}
-
-async function seedCatalog() {
-  for (const [index, book] of featuredCatalog.entries()) {
-    const created = await api("/catalog/books", { method:"POST", body:JSON.stringify({ title:book.title, author:book.author }) });
-    for (let copy = 0; copy < (index === 1 ? 4 : index === 2 ? 1 : 2); copy++) {
-      await api(`/catalog/books/${created.book_id}/copies`, { method:"POST" });
-    }
-  }
-  await api("/catalog/books", { method:"POST", body:JSON.stringify({ title:"Small Hours", author:"Leonie Park" }) }).catch(() => {});
-  const small = await api("/catalog/books?limit=100");
-  const found = (small.items || []).find(book => book.title === "Small Hours");
-  if (found) for (let copy = 0; copy < 3; copy++) await api(`/catalog/books/${found.book_id}/copies`, { method:"POST" }).catch(() => {});
 }
 
 function bookMeta(book, index) {
@@ -160,9 +119,8 @@ function renderBooks(items) {
     const node = $(`#availability-${CSS.escape(book.book_id)}`);
     if (!node) return;
     try {
-      const copies = await api(`/catalog/books/${book.book_id}/copies?limit=100`);
-      node.textContent = `${copies.items.length} ${copies.items.length === 1 ? "copy" : "copies"} available`;
-      book.copies = copies.items;
+      const availability = await api(`/availability/books/${book.book_id}/availability`);
+      node.textContent = `${availability.available_copies} ${availability.available_copies === 1 ? "copy" : "copies"} available`;
     } catch { node.textContent = "Check availability"; }
   });
 }
@@ -184,7 +142,11 @@ function showFeature(index) {
   $("#featuredDescription").textContent = featuredCatalog[state.featuredIndex]?.description || "A new addition to the Bibliotheca collection.";
   $("#featuredReserve").dataset.reserve = book.book_id;
   $("#featuredReserve").dataset.title = book.title;
-  $("#featuredAvailability").textContent = book.copies?.length ? `${book.copies.length} copies available` : "Available";
+  api(`/availability/books/${book.book_id}/availability`)
+    .then(availability => {
+      $("#featuredAvailability").textContent = `${availability.available_copies} ${availability.available_copies === 1 ? "copy" : "copies"} available`;
+    })
+    .catch(() => { $("#featuredAvailability").textContent = "Availability unavailable"; });
   $("#featureIndex").textContent = String(state.featuredIndex + 1).padStart(2,"0");
 }
 
@@ -237,7 +199,6 @@ $("#reserveForm").addEventListener("submit", async event => {
   event.preventDefault();
   try {
     const response = await api("/reservations/reservations", { method:"POST", body:JSON.stringify({book_id:state.pendingBook.book_id,member_id:state.member.member_id}) });
-    persistReservation(response);
     $("#reserveDialog").close();
     showToast(`Reservation placed for “${state.pendingBook.title}”`);
     await refreshMemberData();
@@ -268,16 +229,15 @@ async function refreshReservations(render = true) {
     if (render) renderReservations();
     return;
   }
-  state.reservations = JSON.parse(localStorage.getItem("bibliothecaReservations") || "[]").filter(item => item.member_id === state.member.member_id);
+  const data = await api(`/reservations/reservations?member_id=${state.member.member_id}&limit=100&offset=0`);
+  state.reservations = data.items || [];
   if (render) renderReservations();
 }
 
 async function refreshLoans(render = true) {
   if (!state.member) return;
-  try {
-    const data = await api(`/loans/loans?member_id=${state.member.member_id}&limit=100&offset=0`);
-    state.loans = data.items || [];
-  } catch { state.loans = []; }
+  const data = await api(`/loans/loans?member_id=${state.member.member_id}&limit=100&offset=0`);
+  state.loans = data.items || [];
   if (render) renderLoans();
 }
 
@@ -328,7 +288,9 @@ document.addEventListener("click", async event => {
   if (borrow) {
     try {
       const copies = await api(`/catalog/books/${borrow.dataset.bookId}/copies?limit=100`);
-      const copy = copies.items?.[0];
+      const copy = copies.items?.find(item => item.copy_id === state.reservations.find(
+        reservation => reservation.reservation_id === borrow.dataset.borrowReservation
+      )?.copy_id);
       if (!copy) throw new Error("No available copy for this title");
       await api("/loans/loans", {
         method:"POST",
@@ -338,10 +300,6 @@ document.addEventListener("click", async event => {
           copy_id:copy.copy_id
         })
       });
-      const reservations = JSON.parse(localStorage.getItem("bibliothecaReservations") || "[]");
-      localStorage.setItem("bibliothecaReservations", JSON.stringify(
-        reservations.filter(item => item.reservation_id !== borrow.dataset.borrowReservation)
-      ));
       await refreshReservations();
       await refreshLoans();
       showToast("Loan checked out");
@@ -352,9 +310,6 @@ document.addEventListener("click", async event => {
   if (cancel) {
     try {
       await api(`/reservations/reservations/${cancel.dataset.cancelReservation}`, {method:"DELETE"});
-      let stored = JSON.parse(localStorage.getItem("bibliothecaReservations") || "[]");
-      stored = stored.filter(item => item.reservation_id !== cancel.dataset.cancelReservation);
-      localStorage.setItem("bibliothecaReservations", JSON.stringify(stored));
       await refreshReservations();
       showToast("Hold cancelled");
     } catch (error) { showToast(error.message); }
@@ -369,21 +324,22 @@ document.addEventListener("click", async event => {
   }
 });
 
-// Reservation POST response is retained locally because the existing service
-// does not expose a member reservation list.
-async function persistReservation(response) {
-  const stored = JSON.parse(localStorage.getItem("bibliothecaReservations") || "[]");
-  stored.push({...response, member_id:state.member.member_id});
-  localStorage.setItem("bibliothecaReservations",JSON.stringify(stored));
-}
-
 async function checkServices() {
   try {
-    await api("/member/ready");
+    await Promise.all([
+      api("/member/ready"),
+      api("/catalog/ready"),
+      api("/reservations/ready"),
+      api("/loans/ready"),
+      api("/availability/ready")
+    ]);
     $("#serviceDot").classList.remove("offline");
   } catch { $("#serviceDot").classList.add("offline"); }
 }
 
 const saved = JSON.parse(localStorage.getItem("bibliothecaMember") || "null");
-if (saved) signIn(saved.name, saved.email).catch(() => {});
+if (saved) signIn(saved.name, saved.email).catch(error => {
+  localStorage.removeItem("bibliothecaMember");
+  showToast(error.message);
+});
 checkServices();

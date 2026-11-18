@@ -37,3 +37,4 @@ class AvailabilityResponse(BaseModel):
     loaned_copies: int
     reserved_copies: int
     available_copies: int
+    available_copy_ids: list[UUID]

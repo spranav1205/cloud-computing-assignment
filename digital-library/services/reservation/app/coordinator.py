@@ -10,6 +10,12 @@ class BookCoordinator(Protocol):
     def lock(self, book_id: str) -> Iterator[None]:
         ...
 
+    def ready(self) -> None:
+        ...
+
+    def close(self) -> None:
+        ...
+
 
 class InMemoryCoordinator:
     def __init__(self):
@@ -22,6 +28,12 @@ class InMemoryCoordinator:
             lock = self._locks.setdefault(book_id, Lock())
         with lock:
             yield
+
+    def ready(self) -> None:
+        return None
+
+    def close(self) -> None:
+        return None
 
 
 def configured_coordinator() -> BookCoordinator:
@@ -45,5 +57,15 @@ def configured_coordinator() -> BookCoordinator:
             lock = ZooLock(self.client, f"/library/books/{book_id}")
             with lock:
                 yield
+
+        def ready(self) -> None:
+            from kazoo.protocol.states import KazooState
+
+            if self.client.state != KazooState.CONNECTED:
+                raise RuntimeError("ZooKeeper is not connected")
+
+        def close(self) -> None:
+            self.client.stop()
+            self.client.close()
 
     return ZooKeeperCoordinator()

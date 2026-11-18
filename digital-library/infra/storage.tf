@@ -85,6 +85,26 @@ resource "aws_dynamodb_table" "copies" {
   }
 }
 
+resource "aws_dynamodb_table" "notification_dedupe" {
+  name                        = "${local.name}-NotificationDedupe"
+  billing_mode                = "PAY_PER_REQUEST"
+  hash_key                    = "notification_id"
+  deletion_protection_enabled = var.protect_data
+
+  attribute {
+    name = "notification_id"
+    type = "S"
+  }
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+}
+
 resource "aws_s3_bucket" "covers" {
   bucket        = var.cover_bucket_name
   force_destroy = false

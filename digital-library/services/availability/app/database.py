@@ -60,10 +60,12 @@ class AvailabilityStore:
         unallocated_copies = copies - loaned_copy_ids - explicitly_reserved
         unassigned_reserved_count = min(unassigned_holds, len(unallocated_copies))
 
+        sorted_available_copies = sorted(unallocated_copies)
         return AvailabilityResponse(
             book_id=book_id,
             total_copies=len(copies),
             loaned_copies=len(loaned_copy_ids),
             reserved_copies=len(explicitly_reserved) + unassigned_reserved_count,
             available_copies=len(unallocated_copies) - unassigned_reserved_count,
+            available_copy_ids=sorted_available_copies[unassigned_reserved_count:],
         )

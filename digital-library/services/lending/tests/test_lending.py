@@ -141,6 +141,7 @@ def test_checkout_validation_follows_catalog_pagination():
                     "book_id": str(book_id),
                     "member_id": str(member_id),
                     "status": "READY",
+                    "copy_id": str(copy_id),
                 },
             )
         if request.url.path == f"/members/{member_id}":

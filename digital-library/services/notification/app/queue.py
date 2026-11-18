@@ -41,7 +41,13 @@ class SqsQueue(NotificationQueue):
         notification_id = uuid4()
         self.client.send_message(
             QueueUrl=self.queue_url,
-            MessageBody=json.dumps({"notification_id": str(notification_id), "event": event.model_dump(mode="json")}),
+            MessageBody=json.dumps({
+                "notification_id": str(notification_id),
+                "event": event.model_dump(mode="json"),
+                "recipient": str(event.recipient),
+                "subject": event.subject,
+                "body": event.body,
+            }),
         )
         return notification_id
 
@@ -55,5 +61,5 @@ def deliver(event: NotificationEvent) -> None:
         "notification_sent event_type=%s member_id=%s message=%s",
         event.event_type,
         event.member_id,
-        event.message,
+        event.body,
     )
