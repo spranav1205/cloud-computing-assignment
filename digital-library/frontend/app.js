@@ -90,7 +90,6 @@ async function signIn(name, email) {
 }
 
 $("#loginForm").addEventListener("submit", async event => {
-  event.preventEvent = true;
   event.preventDefault();
   try {
     await signIn($("#loginName").value, $("#loginEmail").value);
@@ -101,6 +100,9 @@ $("#demoLogin").addEventListener("click", () => signIn("Nishant Pradhan", "nisha
 $("#signOutButton").addEventListener("click", () => {
   localStorage.removeItem("bibliothecaMember");
   state.member = null;
+  $("#loginName").value = "Nishant Pradhan";
+  $("#loginEmail").value = "nishant@example.com";
+  $("#loginPassword").value = "library123";
   $("#appShell").hidden = true;
   $("#loginScreen").hidden = false;
 });
@@ -205,7 +207,10 @@ $("#viewAll").addEventListener("click", () => {
 
 function applySearch(query) {
   const normalized = query.trim().toLowerCase();
-  const matches = state.books.filter(book => [book.title,book.author,book.isbn||""].join(" ").toLowerCase().includes(normalized));
+  const matches = state.books.filter(book => {
+    const featured = featuredCatalog.find(item => item.title === book.title);
+    return [book.title, book.author, book.isbn || "", featured?.subject || ""].join(" ").toLowerCase().includes(normalized);
+  });
   $("#collectionTitle").textContent = normalized ? `Results for “${query.trim()}”` : "Today’s reading";
   renderBooks(matches);
   $("#collectionSection").scrollIntoView({behavior:"smooth"});
@@ -258,27 +263,11 @@ async function refreshMemberData() {
 }
 
 async function refreshReservations(render = true) {
-  if (!state.member) return;
-  try {
-    const reservations = [];
-    for (const book of state.books) {
-      const page = await api(`/reservations/reservations?member_id=${state.member.member_id}`).catch(() => null);
-      break;
-    }
-  } catch {}
-  state.reservations = [];
-  try {
-    state.reservations = await getLocalReservations();
-  } catch {}
-  if (render) renderReservations();
-}
-
-async function getLocalReservations() {
-  const stored = JSON.parse(localStorage.getItem("bibliothecaReservations") || "[]");
-  return stored.filter(item => item.member_id === state.member.member_id);
-}
-
-async function refreshReservations(render = true) {
+  if (!state.member) {
+    state.reservations = [];
+    if (render) renderReservations();
+    return;
+  }
   state.reservations = JSON.parse(localStorage.getItem("bibliothecaReservations") || "[]").filter(item => item.member_id === state.member.member_id);
   if (render) renderReservations();
 }
@@ -305,7 +294,10 @@ function renderReservations() {
       <div><h3>${escapeHtml(book?.title || "Library title")}</h3><p>${escapeHtml(book?.author || "Bibliotheca")}</p></div>
       <div><span class="record-status ${reservation.status === "WAITLISTED" ? "waitlist" : ""}">${reservation.status}</span></div>
       <div><p>Hold #${reservation.queue_position}</p></div>
-      <button type="button" data-cancel-reservation="${reservation.reservation_id}">Cancel hold</button>
+      <div class="record-actions">
+        ${reservation.status === "READY" ? `<button type="button" data-borrow-reservation="${reservation.reservation_id}" data-book-id="${reservation.book_id}">Borrow</button>` : ""}
+        <button type="button" data-cancel-reservation="${reservation.reservation_id}">Cancel hold</button>
+      </div>
     </article>`;
   }).join("");
 }
@@ -332,6 +324,30 @@ function renderLoans() {
 }
 
 document.addEventListener("click", async event => {
+  const borrow = event.target.closest("[data-borrow-reservation]");
+  if (borrow) {
+    try {
+      const copies = await api(`/catalog/books/${borrow.dataset.bookId}/copies?limit=100`);
+      const copy = copies.items?.[0];
+      if (!copy) throw new Error("No available copy for this title");
+      await api("/loans/loans", {
+        method:"POST",
+        body:JSON.stringify({
+          member_id:state.member.member_id,
+          reservation_id:borrow.dataset.borrowReservation,
+          copy_id:copy.copy_id
+        })
+      });
+      const reservations = JSON.parse(localStorage.getItem("bibliothecaReservations") || "[]");
+      localStorage.setItem("bibliothecaReservations", JSON.stringify(
+        reservations.filter(item => item.reservation_id !== borrow.dataset.borrowReservation)
+      ));
+      await refreshReservations();
+      await refreshLoans();
+      showToast("Loan checked out");
+      switchView("loans");
+    } catch (error) { showToast(error.message); }
+  }
   const cancel = event.target.closest("[data-cancel-reservation]");
   if (cancel) {
     try {
