@@ -98,7 +98,10 @@ def test_return_is_idempotent_and_cancels_the_ready_reservation(api):
     assert first.status_code == second.status_code == 200
     assert first.json()["status"] == second.json()["status"] == "RETURNED"
     assert first.json()["returned_at"] == second.json()["returned_at"]
-    assert dependencies.cancelled == [payload["reservation_id"], payload["reservation_id"]]
+    assert [str(reservation_id) for reservation_id in dependencies.cancelled] == [
+        payload["reservation_id"],
+        payload["reservation_id"],
+    ]
 
 
 def test_not_ready_reservation_rejects_checkout(api):

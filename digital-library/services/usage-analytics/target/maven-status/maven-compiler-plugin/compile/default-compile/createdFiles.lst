@@ -1,0 +1,8 @@
+edu\birla\library\analytics\LibraryEvent.class
+edu\birla\library\analytics\WindowAggregator.class
+edu\birla\library\analytics\UsageAnalyticsJob$EventAggregate.class
+edu\birla\library\analytics\UsageAnalyticsJob$WindowResult.class
+edu\birla\library\analytics\UsageAnalyticsJob.class
+edu\birla\library\analytics\AnalyticsAccumulator.class
+edu\birla\library\analytics\AnalyticsResult.class
+edu\birla\library\analytics\UsageAnalyticsJob$1.class
