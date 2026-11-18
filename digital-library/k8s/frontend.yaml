@@ -19,7 +19,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: frontend
-          image: library-frontend:local
+          image: "380560899065.dkr.ecr.ap-south-1.amazonaws.com/digital-library-dev/frontend@sha256:d7dbec1bbb8e5d355e44e7c33dfab0dc5ed3b7b70a5917bfdb82e8c6d0d9de4c"
           ports:
             - {name: http, containerPort: 4173}
           env:

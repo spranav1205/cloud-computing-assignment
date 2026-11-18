@@ -4,7 +4,7 @@ metadata:
   name: notification
   namespace: library
   annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::111111111111:role/REPLACE-WITH-TERRAFORM-NOTIFICATION-ROLE
+    eks.amazonaws.com/role-arn: "arn:aws:iam::380560899065:role/digital-library-dev-notification-api"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -28,7 +28,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: notification
-          image: library-notification:local
+          image: "380560899065.dkr.ecr.ap-south-1.amazonaws.com/digital-library-dev/notification@sha256:f06a5a1d5b44f90b51796e17b22add81cb00338798478c898727f122859b55ee"
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -81,9 +81,9 @@ metadata:
   name: notification-config
   namespace: library
 data:
-  AWS_REGION: ap-south-1
+  AWS_REGION: "ap-south-1"
   # Set this for AWS/SQS mode; omit it for the local in-memory adapter.
-  NOTIFICATION_QUEUE_URL: ""
+  NOTIFICATION_QUEUE_URL: "https://sqs.ap-south-1.amazonaws.com/380560899065/digital-library-dev-notification"
 ---
 apiVersion: v1
 kind: Service

@@ -3,14 +3,15 @@
 Current review: 19 November 2026. Read-only STS succeeds for account
 `380560899065`; providers are initialized and local Terraform state exists.
 Historical credential, saved-plan, and placeholder findings in checkpoint docs
-do not describe the current environment. Do not delete or replace state while
-the current apply is running. Terraform explicitly selects Mumbai; the CLI's
+do not describe the current environment. Compute recovery completed successfully:
+Terraform added 2 resources, changed 0 and destroyed 0 on the final restore apply.
+EKS has one Ready worker and EMR is ready to run steps. Terraform explicitly selects Mumbai; the CLI's
 default region does not override it. Use `--region ap-south-1` for AWS CLI calls.
 
-1. Finish the current infrastructure apply. The Notification API publishing role
-   added in `infra/messaging.tf` needs a subsequent reviewed plan/apply: an already
-   running saved plan cannot include later source edits. Its permission is limited
-   to `sqs:SendMessage` on the application queue.
+1. Infrastructure is provisioned, including the Notification API publishing role.
+   Its permission is limited to `sqs:SendMessage` on the application queue.
+   Preserve the local Terraform state. Generate a fresh plan for any future
+   infrastructure change; do not reuse the old recovery plans.
 2. Publish the eight images with `scripts/publish-images.ps1`, then run the local
    preparation helper from the repository root:
 
@@ -53,11 +54,21 @@ default region does not override it. Use `--region ap-south-1` for AWS CLI calls
 6. Run the existing smoke test through service port-forwards. SES sender
    verification is required to test actual email delivery.
 
-The selected single `t3.medium` is preserved. Expect pending pods if the complete
-platform, Argo CD and monitoring are all enabled; increase worker capacity or
-choose a smaller demo footprint before expecting that entire stack to run.
-HPA does not add worker nodes. The node group spans both configured private AZs,
-and is not pinned to the first AZ (EMR is).
+The local `terraform.tfvars` now selects one `t3.xlarge` EKS worker (4 vCPUs,
+16 GiB), paired with one `m5.xlarge` EMR primary (4 vCPUs, 16 GiB) and no core
+group. This totals the verified Mumbai quota of 8 Standard On-Demand vCPUs.
+Catalog and Reservation HPA ranges are 1-2 replicas. HPA does not add workers.
+No other Standard On-Demand instances or temporary replacement capacity fit
+alongside both nodes. The node group spans both private AZs; EMR uses the first.
+
+The old two-node EMR cluster and failed worker group were removed during the
+approved recovery. Their replacements are now running within the 8-vCPU quota.
+EMR termination protection is enabled on the new cluster; storage is retained.
+The worker depends on EMR so future creation waits for EMR to finish first.
+Read-only Kubernetes verification confirmed the worker and baseline networking/
+DNS pods are healthy. Application workloads have not been deployed yet.
+The apply log is `.local/compute-restore-apply.txt` under `infra`; the workspace
+kubeconfig is `.local/recovery-kubeconfig` under `digital-library`.
 
 No Kafka publisher was added to Lending/Reservation. Analytics needs a manually
 submitted job and separately supplied events. Its documented topics now match

@@ -29,7 +29,7 @@ foreach ($role in @($catalog.role_arn, $notification.api_role_arn, $outputs.flue
     }
 }
 foreach ($value in @($catalog.bucket_name, $catalog.books_table_name, $catalog.copies_table_name, $notification.queue_url)) {
-    if (!$value -or $value -match 'replace-with') { throw 'Missing storage or SQS Terraform output.' }
+    if (!$value) { throw 'Missing storage or SQS Terraform output.' }
 }
 
 function Set-YamlValue {

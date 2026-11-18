@@ -96,5 +96,6 @@ resource "aws_eks_node_group" "library" {
     min_size     = 1
     max_size     = 1
   }
-  depends_on = [aws_iam_role_policy_attachment.nodes, aws_route.private_internet]
+  # Wait for EMR replacement to release its old capacity before launching EKS.
+  depends_on = [aws_iam_role_policy_attachment.nodes, aws_route.private_internet, aws_emr_cluster.analytics]
 }

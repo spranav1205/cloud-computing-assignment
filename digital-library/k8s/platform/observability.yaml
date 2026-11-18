@@ -11,7 +11,24 @@ spec:
     targetRevision: 69.8.2
     helm:
       values: |
+        alertmanager:
+          enabled: false
+        prometheusOperator:
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 300m, memory: 256Mi}
+        kube-state-metrics:
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+        prometheus-node-exporter:
+          resources:
+            requests: {cpu: 50m, memory: 32Mi}
+            limits: {cpu: 100m, memory: 64Mi}
         grafana:
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 300m, memory: 384Mi}
           admin:
             existingSecret: grafana-admin
           dashboardProviders:
@@ -30,6 +47,11 @@ spec:
         prometheus:
           prometheusSpec:
             serviceMonitorSelectorNilUsesHelmValues: false
+            retention: 1d
+            retentionSize: 512MB
+            resources:
+              requests: {cpu: 200m, memory: 512Mi}
+              limits: {cpu: 500m, memory: 1Gi}
   destination:
     server: https://kubernetes.default.svc
     namespace: observability

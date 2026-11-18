@@ -1,6 +1,7 @@
 param(
     [string]$Profile = 'default',
-    [string]$Tag = ''
+    [string]$Tag = '',
+    [switch]$SkipLogin
 )
 
 $ErrorActionPreference = 'Stop'
@@ -9,8 +10,14 @@ $services = @('member', 'catalog', 'reservation', 'notification', 'fine', 'lendi
 
 function Invoke-Checked {
     param([string]$Program, [string[]]$Arguments)
-    & $Program @Arguments
-    if ($LASTEXITCODE -ne 0) { throw "$Program failed with exit code $LASTEXITCODE" }
+    $savedPreference = $ErrorActionPreference
+    try {
+        # Docker writes ordinary build progress to stderr on Windows PowerShell.
+        $ErrorActionPreference = 'Continue'
+        & $Program @Arguments
+        $programExit = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $savedPreference }
+    if ($programExit -ne 0) { throw "$Program failed with exit code $programExit" }
 }
 
 Push-Location $projectRoot
@@ -39,10 +46,21 @@ try {
         $Tag = "$revision-$([DateTime]::UtcNow.ToString('yyyyMMddHHmmss'))"
     }
     if ($Tag -notmatch '^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$') { throw 'Invalid Docker image tag.' }
+    if (!$SkipLogin) {
     $password = Invoke-Checked -Program aws -Arguments @('ecr', 'get-login-password', '--region', $region, '--no-cli-pager')
-    $password | & docker login --username AWS --password-stdin $registry
-    if ($LASTEXITCODE -ne 0) { throw 'ECR login failed.' }
+    $loggedIn = $false
+    for ($attempt = 0; $attempt -lt 3; $attempt++) {
+        $savedPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            $password | & docker login --username AWS --password-stdin $registry
+            $loggedIn = $LASTEXITCODE -eq 0
+        } finally { $ErrorActionPreference = $savedPreference }
+        if ($loggedIn) { break }
+    }
+    if (!$loggedIn) { throw 'ECR login failed after three attempts.' }
     $password = $null
+    }
 
     $published = [ordered]@{}
     $reportDir = Join-Path $projectRoot '.local'
@@ -52,6 +70,13 @@ try {
         $context = if ($service -eq 'frontend') { 'frontend' } else { "services/$service" }
         $repository = $repositories.$service
         $image = "${repository}:$Tag"
+        $existingDigest = Invoke-Checked -Program aws -Arguments @('ecr', 'list-images', '--repository-name', $repository.Substring($registry.Length + 1), '--filter', 'tagStatus=TAGGED', '--region', $region, '--query', "imageIds[?imageTag=='$Tag'].imageDigest | [0]", '--output', 'text', '--no-cli-pager')
+        if ($existingDigest -match '^sha256:[a-f0-9]{64}$') {
+            $published[$service] = "${repository}@$existingDigest"
+            [System.IO.File]::WriteAllText($report, ($published | ConvertTo-Json), [System.Text.UTF8Encoding]::new($false))
+            Write-Host "Already published $service -> $($published[$service])"
+            continue
+        }
         Invoke-Checked -Program docker -Arguments @('build', '--platform', 'linux/amd64', '-t', $image, $context)
         Invoke-Checked -Program docker -Arguments @('push', $image)
         $name = $repository.Substring($registry.Length + 1)

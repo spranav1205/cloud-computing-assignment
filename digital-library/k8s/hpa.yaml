@@ -8,8 +8,8 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: catalog
-  minReplicas: 2
-  maxReplicas: 6
+  minReplicas: 1
+  maxReplicas: 2
   behavior:
     scaleUp:
       stabilizationWindowSeconds: 0
@@ -33,8 +33,8 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: reservation
-  minReplicas: 2
-  maxReplicas: 6
+  minReplicas: 1
+  maxReplicas: 2
   behavior:
     scaleUp:
       stabilizationWindowSeconds: 0

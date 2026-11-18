@@ -24,7 +24,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: lending
-          image: library-lending:local
+          image: "380560899065.dkr.ecr.ap-south-1.amazonaws.com/digital-library-dev/lending@sha256:65bd7f2c7947347d29838a8804e006aafe6e73f2f3459c586ece584d3460179b"
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

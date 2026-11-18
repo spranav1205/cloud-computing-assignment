@@ -43,7 +43,7 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: member-schema
-          image: library-member:checkpoint7
+          image: "380560899065.dkr.ecr.ap-south-1.amazonaws.com/digital-library-dev/member@sha256:e71117c21d3f02794f35d0e123b0545b6e1fe39e803c81c2171f9a67502ce732"
           command: [python, -c]
           args:
             - "from app.database import configured_engine; from app.models import Base; engine = configured_engine(); Base.metadata.create_all(engine); engine.dispose()"
@@ -68,7 +68,7 @@ spec:
             - {name: rds-ca, mountPath: /etc/rds-ca, readOnly: true}
       containers:
         - name: member
-          image: library-member:checkpoint7
+          image: "380560899065.dkr.ecr.ap-south-1.amazonaws.com/digital-library-dev/member@sha256:e71117c21d3f02794f35d0e123b0545b6e1fe39e803c81c2171f9a67502ce732"
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

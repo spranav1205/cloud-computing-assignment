@@ -126,10 +126,8 @@ resource "aws_emr_cluster" "analytics" {
     instance_count = 1
   }
 
-  core_instance_group {
-    instance_type  = "m5.xlarge"
-    instance_count = 1
-  }
+  # Single-node demo: primary runs all components, using 4 of the 8-vCPU quota.
+  # Changing an existing multi-node cluster requires a reviewed replacement.
 
   configurations_json = jsonencode([{
     Classification = "flink-conf"

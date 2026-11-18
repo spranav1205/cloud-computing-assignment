@@ -24,7 +24,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: availability
-          image: library-availability:local
+          image: "380560899065.dkr.ecr.ap-south-1.amazonaws.com/digital-library-dev/availability@sha256:2160f4ec4aa39354d340082e24086e14885759e1eafa7a17b7a7fb1a1d9e510a"
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
