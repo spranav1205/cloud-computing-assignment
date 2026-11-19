@@ -33,6 +33,12 @@ can exercise the loan APIs without proving automatic email delivery.
 
 ## Validation
 
+Verified on AWS on 19 November 2026 after Argo CD deployed notification code
+revision `2bc68e7`: **18 HTTP requests and 8 assertions passed**. Both automatic
+event IDs reached SES before explicit intake was called. Subsequent ID replays
+were suppressed by Lambda; Lending logs confirm one enqueue per transition.
+Argo CD was Synced/Healthy and all seven Prometheus targets remained up.
+
 The Notification/Lending container suites pass 14 tests, including concurrent
 returns, stable IDs, old intake compatibility, Lambda duplicate suppression, and
 successful checkout/return despite Member-email lookup or notification HTTP 503s.

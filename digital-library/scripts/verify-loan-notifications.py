@@ -60,7 +60,7 @@ def main():
             page = api("member", f"/members?limit=100&offset={offset}")
             member = next((item for item in page["items"] if item["email"].lower() == recipient), None)
             offset += len(page["items"])
-            if member is not None or offset >= page["total"] or not page["items"]:
+            if member is not None or len(page["items"]) < page["limit"]:
                 break
         if member is None:
             member = api("member", "/members", "POST", {"name": "SES Simulator Notification Audit", "email": recipient}, 201)
