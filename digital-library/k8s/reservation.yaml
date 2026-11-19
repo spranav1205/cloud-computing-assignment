@@ -4,7 +4,7 @@ metadata:
   name: reservation
   namespace: library
 spec:
-  replicas: 1
+  # The HPA owns replicas; GitOps must not reset its scale decisions.
   selector:
     matchLabels: {app: reservation}
   template:
