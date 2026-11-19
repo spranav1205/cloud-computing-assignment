@@ -3,8 +3,10 @@
 Verified on 19 November 2026 against the running EKS deployment:
 
 - Prometheus is Ready and its operator reports reconciliation successful.
-- Member, Catalog, Lending, Availability and Fine all have healthy scrape targets.
-- Real application request counters are present for all five services.
+- Member, Catalog, Lending, Availability, Fine, Reservation and Notification all
+  have healthy scrape targets.
+- Real application request counters and latency histograms are present for all
+  seven services, including the two newly deployed metrics endpoints.
 - Grafana can query Prometheus, and all five live dashboard queries validate.
 - The existing EKS worker and EMR instance remain the only compute instances;
   monitoring adds pods on the existing worker, not EC2 instances.
@@ -32,17 +34,30 @@ kubectl --kubeconfig digital-library/.local/recovery-kubeconfig -n observability
 kubectl --kubeconfig digital-library/.local/recovery-kubeconfig -n observability port-forward service/library-observability-kube-prometheus 19090:9090 --address 127.0.0.1
 ```
 
-`k8s/platform/library-monitoring.yaml` contains the PodMonitor and dashboard.
-The queries match the services' actual prefixed metric names. Reservation and
-Notification have no `/metrics` endpoint; no service functionality was added.
+`k8s/platform/library-monitoring.yaml` contains the seven-service PodMonitor and
+dashboard. The queries match the services' actual prefixed metric names.
+Reservation and Notification now expose `/metrics`, following the other services'
+per-app Counter/Histogram implementation with `prometheus-client==0.21.1`.
+Their eight service tests passed, including error counting and route templates.
 
 The CRDs were installed with server-side apply. The operator was restarted after
 CRD installation because it had started before the required CRDs existed.
 `ServerSideApply=true` is included in the local observability Application input
 to avoid oversized last-applied annotations during future installations.
 
-The PodMonitor and dashboard are applied to the cluster. Monitoring source changes
-are local only; no further Git push was made after the request to stop Git work.
-Verification output is recorded in `.local/monitoring-verification.json`.
+The metrics follow-up's two API images were deployed through Argo CD at revision
+`d82c552529327125b18d45ed6b4e13b76d512a23` on
+`deploy/deploy-20261118203335`. Only Reservation and Notification were rebuilt for
+that change. A later automatic-notification update rebuilds Lending/Notification;
+its audit also confirms seven healthy targets and Argo CD Synced/Healthy.
+The PodMonitor and dashboard were directly applied
+using the existing monitoring workflow; they are also saved on that branch.
+This does not remove the strict GitOps caveat for platform resources.
+
+The configuration reload took about three minutes after the monitor update.
+Verification subsequently confirmed seven healthy targets, all seven public
+metrics endpoints, and all five queries through Grafana's Prometheus datasource.
+Current evidence is `.local/metrics-verification.json`; the original five-service
+baseline remains in `.local/monitoring-verification.json`.
 Monitoring storage is ephemeral for this demo; no additional disk or storage
 service was provisioned.

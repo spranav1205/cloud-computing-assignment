@@ -11,8 +11,9 @@ class NotificationEvent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     event_type: Literal[
-        "ReservationReady", "AvailabilityChanged", "DueDateReminder", "LoanReturned"
+        "ReservationReady", "AvailabilityChanged", "DueDateReminder", "LoanIssued", "LoanReturned"
     ]
+    event_id: UUID | None = None
     recipient: EmailStr
     subject: str = Field(default="Digital Library notification", min_length=1, max_length=200)
     body: str = Field(min_length=1, max_length=1000)

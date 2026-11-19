@@ -151,8 +151,8 @@ def run(urls, recipient="success@simulator.amazonses.com", frontend_url=None):
         require(receipt["status"] == "QUEUED", "Notification was not queued")
         records["notification_id"] = receipt["notification_id"]
         passed("notification intake accepted the event (delivery checked separately in AWS mode)")
-        for service in ("member", "catalog", "lending", "availability"):
-            api(service, "/metrics", raw=True)
+        for service in ("member", "catalog", "lending", "availability", "fine", "reservation", "notification"):
+            require(b"_http_requests_total" in api(service, "/metrics", raw=True), f"{service} request metrics missing")
         passed("Prometheus metrics are exposed")
         if frontend_url:
             root = frontend_url.rstrip("/")

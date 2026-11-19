@@ -24,7 +24,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: lending
-          image: "380560899065.dkr.ecr.ap-south-1.amazonaws.com/digital-library-dev/lending@sha256:65bd7f2c7947347d29838a8804e006aafe6e73f2f3459c586ece584d3460179b"
+          image: "380560899065.dkr.ecr.ap-south-1.amazonaws.com/digital-library-dev/lending@sha256:19607cdc93b35f7d3500d2bfd01832b9929f9751593bc2fd6837d792448bccae"
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -45,6 +45,8 @@ spec:
               value: http://catalog:80
             - name: RESERVATION_URL
               value: http://reservation:80
+            - name: NOTIFICATION_URL
+              value: http://notification:80
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

@@ -1,7 +1,9 @@
 import json
-from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from urllib.parse import unquote
 from uuid import uuid4
+from unittest.mock import Mock
 
 import httpx
 import pytest
@@ -12,6 +14,7 @@ from app.clients import CheckoutConflict, LendingDependencies
 from app.database import LendingStore
 from app.main import create_app
 from app.models import Base, LoanCreate
+from app.notifications import LoanNotifications, notification_id
 
 
 class FakeDependencies:
@@ -45,6 +48,7 @@ def api(tmp_path):
             store=LendingStore(engine),
             dependencies=dependencies,
             loan_period_days=7,
+            notifications=Mock(),
         )
     ) as client:
         yield client, engine, dependencies
@@ -102,6 +106,76 @@ def test_return_is_idempotent_and_cancels_the_ready_reservation(api):
         payload["reservation_id"],
         payload["reservation_id"],
     ]
+    assert [call.args[1] for call in client.app.state.notifications.publish.call_args_list] == ["LoanIssued", "LoanReturned"]
+
+
+def test_concurrent_returns_emit_one_event_and_preserve_timestamp(api):
+    client, _, _ = api
+    response, _, _ = create_loan(api)
+    path = f"/loans/{response.json()['loan_id']}/return"
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        responses = list(pool.map(lambda _: client.post(path), range(4)))
+    assert all(response.status_code == 200 for response in responses)
+    assert len({response.json()["returned_at"] for response in responses}) == 1
+    assert [call.args[1] for call in client.app.state.notifications.publish.call_args_list] == ["LoanIssued", "LoanReturned"]
+
+
+@pytest.mark.parametrize("failure", ["member", "notification"])
+def test_notification_failure_does_not_fail_committed_loans(api, caplog, failure):
+    client, _, _ = api
+
+    def handle(request):
+        if request.url.host == "member" and failure != "member":
+            return httpx.Response(200, json={"email": "stored@example.com"})
+        return httpx.Response(503)
+
+    notifications = LoanNotifications("http://member", "http://notification", httpx.Client(transport=httpx.MockTransport(handle)))
+    client.app.state.notifications = notifications
+    try:
+        issued, _, _ = create_loan(api)
+        assert issued.status_code == 201
+        loan_id = issued.json()["loan_id"]
+        returned = client.post(f"/loans/{loan_id}/return")
+        assert returned.status_code == 200
+        assert client.get(f"/loans/{loan_id}").json()["status"] == "RETURNED"
+        assert caplog.text.count("notification_publish_failed") == 2
+    finally:
+        notifications.close()
+
+
+def test_notifications_use_member_email_stable_ids_and_transition_times(api):
+    client, _, _ = api
+    events = []
+
+    def handle(request):
+        if request.method == "GET":
+            return httpx.Response(200, json={"email": "stored@example.com"})
+        event = json.loads(request.content)
+        events.append(event)
+        return httpx.Response(202, json={"notification_id": event["event_id"], "status": "QUEUED"})
+
+    notifications = LoanNotifications("http://member", "http://notification", httpx.Client(transport=httpx.MockTransport(handle)))
+    client.app.state.notifications = notifications
+    try:
+        issued, payload, _ = create_loan(api)
+        loan = issued.json()
+        assert issued.status_code == 201
+        assert client.post("/loans", json=payload).status_code == 409
+        returned = client.post(f"/loans/{loan['loan_id']}/return").json()
+        assert client.post(f"/loans/{loan['loan_id']}/return").status_code == 200
+        assert client.post(f"/loans/{uuid4()}/return").status_code == 404
+        assert [event["event_type"] for event in events] == ["LoanIssued", "LoanReturned"]
+        for event, timestamp in zip(events, [loan["checked_out_at"], returned["returned_at"]]):
+            assert event["recipient"] == "stored@example.com"
+            assert event["member_id"] == payload["member_id"]
+            assert event["event_id"] == str(notification_id(loan["loan_id"], event["event_type"]))
+            expected = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            if expected.tzinfo is None:  # SQLite omits the timezone on persisted dates.
+                expected = expected.replace(tzinfo=timezone.utc)
+            assert datetime.fromisoformat(event["occurred_at"]) == expected
+        assert events[0]["event_id"] != events[1]["event_id"]
+    finally:
+        notifications.close()
 
 
 def test_not_ready_reservation_rejects_checkout(api):

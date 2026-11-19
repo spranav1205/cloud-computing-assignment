@@ -28,7 +28,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: notification
-          image: "380560899065.dkr.ecr.ap-south-1.amazonaws.com/digital-library-dev/notification@sha256:f06a5a1d5b44f90b51796e17b22add81cb00338798478c898727f122859b55ee"
+          image: "380560899065.dkr.ecr.ap-south-1.amazonaws.com/digital-library-dev/notification@sha256:5a7fd98e59cca285d8d0f249b7a1a2faac52fcd1fea3d8c2424007219aed8b16"
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

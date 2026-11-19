@@ -1,26 +1,45 @@
 # AWS verification and one-service-at-a-time CLI tests
 
 **19 November 2026.** Tests use the deployed AWS app, not Compose or mocks.
-Fresh audit: **144 HTTP requests and 35 assertions passed**, including all **23
+Post-metrics baseline audit: **144 HTTP requests and 37 assertions passed**, including all **23
 implemented REST business endpoints**, validation, pagination, private covers,
 loan return, and five concurrent reservations. This does **not** mean all eight
 assignment services are complete: Usage Analytics is not demonstrated running.
-No service code, deployment, infrastructure, or Git configuration was changed
-during this audit. Test calls create labeled demo records; loans are returned and
+The original audit made no service/deployment changes. The subsequent metrics
+follow-up updates only Reservation/Notification images and the monitoring manifest.
+Test calls create labeled demo records; loans are returned and
 holds canceled. Member/book/copy/cover records remain because deletion APIs do not exist.
+
+Follow-up verification also passed eight Reservation/Notification service tests,
+seven real Prometheus scrape targets, and five Grafana datasource queries. Argo CD
+was Synced/Healthy at metrics revision `d82c552` on `deploy/deploy-20261118203335`.
+All **13 exact PowerShell blocks below were executed sequentially** against AWS
+in one session, including the isolated overdue fixture. The original audit had
+35 assertions; the two additional assertions require Reservation/Notification metrics.
+
+The subsequent automatic-notification deployment at `2bc68e7` passed **18 public
+HTTP requests and 8 assertions**, plus 14 Lending/Notification container tests.
+Checkout and first return now automatically publish `LoanIssued`/`LoanReturned`
+to the member's stored email. Both reached the SES simulator before any explicit
+notification POST; replaying their stable IDs produced duplicate-suppression logs
+and no second delivery. Four concurrent returns produced one return event and
+one return timestamp. Argo CD was Synced/Healthy and all seven scrape targets
+remained up. See [NOTIFICATIONS.md](NOTIFICATIONS.md) for policy and reproduction.
+The 144-request audit and 13-block CLI run above predate this notification change;
+the targeted 18-request audit validates the changed flows.
 
 ## Mandatory requirements a–h
 
 | Requirement | Verdict | Evidence / remaining gap |
 |---|---|---|
 | a. IaC | Core infrastructure verified | Terraform state owns VPC/subnets/routes, EKS, RDS, DynamoDB, S3, IAM, Lambda/SQS and EMR. ALB is controller-created from the Ingress manifest; Helm/Kubernetes bootstrap is separate from Terraform. |
-| b. REST + gRPC + queues/serverless | Verified | Real REST calls; Member eligibility gRPC tested from Lending; notification POST → SQS → Lambda → SES simulator delivery confirmed in CloudWatch. |
+| b. REST + gRPC + queues/serverless | Verified | Real REST calls; Member eligibility gRPC tested from Lending; explicit and automatic checkout/return events → SQS → Lambda → SES simulator delivery confirmed in CloudWatch. |
 | c. Managed K8s + two HPAs + load proof | Partial | EKS and Catalog/Reservation HPAs are healthy, min/max 1/2. **No sustained-load test demonstrating scale-out is recorded.** The five-request FIFO test is not an HPA load test. |
 | d. GitOps, no direct service apply | Partial under the strict wording | API Deployments are Argo CD Synced/Healthy. Initial Kafka/ZooKeeper bootstrap and later monitoring resources were directly applied, so do not claim the entire Kubernetes deployment followed a no-`kubectl apply` process. |
 | e. Flink consuming Kafka, windowed output | **Not demonstrated / incomplete** | Windowed stateful job code and two `.v1` Kafka topics exist. EMR has no submitted steps, no analytics consumer group was observed, and both topics have zero records. Lending/Reservation contain no Kafka publisher. An idle EMR cluster is not a passing stream-processing demo. |
 | f. ZooKeeper concept | Functional evidence verified | Three ZooKeeper pods, configured remote locking, live lock-path read, and five parallel reservation calls produced one READY + four WAITLISTED with FIFO positions/promotion. Cross-replica coordination and failure recovery were not tested. |
 | g. Three cloud storage products | Verified | Actual RDS PostgreSQL member/loan/reservation flows; DynamoDB books/copies/GSI; private S3 cover PUT/GET and unsigned 403. |
-| h. Observability | Operational, with metric coverage limitation | Prometheus/Grafana and real RPS/error/latency/cluster queries work; CloudWatch contains aggregated service log streams. Five APIs expose metrics. Reservation/Notification do not expose `/metrics`. |
+| h. Observability | Operational | Prometheus/Grafana and real RPS/error/latency/cluster queries work; CloudWatch contains aggregated service log streams. All seven APIs expose metrics after the Reservation/Notification follow-up. |
 
 **Original task is not fully complete:** at minimum, e and the sustained-load
 demonstration in c remain; d needs attention if the strict prohibition includes
@@ -32,11 +51,11 @@ platform services. Do not describe these as passed merely because the APIs work.
 |---|---|---|
 | Member | All four business endpoints; generated UUID/timestamp, unique email, validation, 404, pagination, no DELETE | None found in tested flows |
 | Catalog | All five book/copy endpoints and three cover endpoints; ISBN validation, pagination/GSI, missing-book rejection | Cover API works; the frontend uses styled artwork and has no cover-upload UI. Bucket has no CORS configuration for a future direct browser upload. |
-| Reservation | Create/list/get/cancel, duplicate rejection, FIFO/promotion, five concurrent calls | `/metrics` is 404; no multi-replica/failover test |
-| Lending | Issue/list/get/return, conflict checks, idempotent return, real gRPC dependency | None found in tested flows |
+| Reservation | Create/list/get/cancel, duplicate rejection, FIFO/promotion, five concurrent calls; metrics added in follow-up | No multi-replica/failover test |
+| Lending | Issue/list/get/return, conflict checks, four concurrent idempotent returns, real gRPC dependency; automatic notifications | Notifications are best-effort after commit; see below. |
 | Availability | Before hold, during loan, after return/cancellation; missing/invalid book IDs | Derived state, not a separate write API |
-| Fine | Active/returned loan assessment, zero fine, missing/invalid IDs | **A positive overdue fine was not tested live.** The formula and positive test fixture exist in code, but the public API cannot set/backdate a loan. No database mutation was used to fake this test. |
-| Notification | Valid/invalid event POST, async receipt, actual Lambda/SES delivery | Must POST an event explicitly; checkout/return does not automatically publish notifications. `/metrics` is 404. |
+| Fine | Active/returned loan assessment, zero fine, missing/invalid IDs; isolated deployed-code overdue HTTP fixture passed | **A positive overdue fine remains untested through the public ingress.** The isolated fixture runs the deployed code in the existing AWS Fine pod against temporary SQLite, with active/returned overdue loans producing 300 cents. Production RDS loan dates are untouched. |
+| Notification | Valid/invalid event POST, metrics, automatic checkout/return delivery, stable-ID replay suppression | Best-effort publishing; no durable outbox. SES recipient restrictions still apply. |
 | Usage Analytics | Kafka topics/offsets and EMR submission state inspected | No REST API by design; no running Flink/output demonstration |
 
 ## Run the CLI examples
@@ -188,8 +207,10 @@ Api reservation "/reservations/$($Waiter.reservation_id)" DELETE
 
 ### 8. Notification — enqueue a simulator email
 
-POST returns 202/QUEUED. This is an explicit notification request, not an automatic
-side effect of returning a loan. The simulator receives no real person's email.
+POST returns 202/QUEUED. This tests explicit intake in addition to the automatic
+checkout/return flow. The simulator receives no real person's email. The earlier
+CLI members use example addresses; their automatic events do not prove SES delivery.
+Use the simulator-only audit in [NOTIFICATIONS.md](NOTIFICATIONS.md) for that proof.
 
 ```powershell
 $Event = @{event_type='LoanReturned';recipient='success@simulator.amazonses.com';subject="CLI verification $Run";body='AWS API test completed.';member_id=$Member.member_id;occurred_at=[DateTime]::UtcNow.ToString('o')}
@@ -200,18 +221,16 @@ Expect notification '/notifications' 422 POST @{event_type='LoanReturned';recipi
 
 ### 9. Common operational endpoints
 
-All seven health/readiness pairs return 200. Five metrics endpoints return text;
-the two 404 checks below document existing gaps rather than passing metrics support.
+All seven health/readiness pairs return 200. All seven metrics endpoints return
+Prometheus text containing request counters.
 
 ```powershell
 foreach ($service in ($Routes.Keys | Sort-Object)) {
     [pscustomobject]@{Service=$service;Health=(Api $service '/health').status;Ready=(Api $service '/ready').status}
 }
-foreach ($service in @('member','catalog','lending','availability','fine')) {
+foreach ($service in ($Routes.Keys | Sort-Object)) {
     [pscustomobject]@{Service=$service;HasRequestMetrics=((Api $service '/metrics') -match '_http_requests_total')}
 }
-Expect reservation '/metrics' 404
-Expect notification '/metrics' 404
 ```
 
 ### 10. Verify the real gRPC path and ZooKeeper
@@ -266,6 +285,42 @@ $EmrId = (aws emr list-clusters --active --region ap-south-1 --query "Clusters[?
 aws emr list-steps --cluster-id $EmrId --region ap-south-1 --query 'Steps[].{Name:Name,State:Status.State}' --output json --no-cli-pager
 ```
 
+### 13. Isolated positive overdue-fine fixture
+
+This runs the deployed Fine code in the existing pod using temporary SQLite and
+a loopback-only HTTP server. It does not access RDS or alter production loans,
+and is **not** a positive-fine test through the public ingress. Expected: PASS,
+three chargeable days/300 cents for active and returned overdue fixtures, zero
+for an on-time return, 404 for an unknown loan, and temporary database cleanup.
+
+```powershell
+Get-Content digital-library/scripts/verify-overdue-fixture.py -Raw | kubectl --kubeconfig $Kube -n library exec -i deployment/fine -- python -
+if ($LASTEXITCODE -ne 0) { throw 'Isolated overdue fixture failed' }
+```
+
 Evidence artifacts: `.local/final-api-audit.json` contains each HTTP result and
-assertion; `.local/final-api-audit.stdout.txt` contains the fresh audit summary.
+assertion from `.local/final-api-audit-metrics.py`; the original 35-assertion result
+is archived in `.local/final-api-audit-before-metrics.json`.
+`.local/cli-guide-verification.json` and `.local/cli-guide-verification.txt` record
+all 13 sequential blocks and actual SES delivery. `.local/metrics-verification.json`
+records seven scrape targets and dashboard query results;
+`.local/overdue-fixture-verification.json` records the isolated fine cases.
+`.local/loan-notifications-verification.json` records the subsequent 18-request
+automatic-notification audit, Lambda delivery/duplicate logs, Lending queue logs,
+Argo CD health and seven healthy scrape targets.
 The API test is functional and bounded, not a load/security/failover test.
+
+## Remaining decisions and assignment caveats
+
+- Automatic checkout/return notifications are implemented using stored Member
+  emails and stable per-loan/event UUIDs. Publishing failures are logged without
+  failing the committed loan operation. Delivery is best-effort: crashes/failed
+  publishes can lose events; no outbox or new publisher retry design was added.
+  Notification failure handling passed container tests, not a forced live outage.
+- Positive overdue fines passed the isolated deployed-code fixture, but remain
+  untested through public ingress. No production loan dates were changed.
+- Usage Analytics still lacks a running Flink demonstration, input events and
+  output results. Lending/Reservation still have no Kafka publisher.
+- Catalog/Reservation HPAs remain healthy; sustained-load scale-out is unproven.
+- API updates use Argo CD; bootstrap/monitoring direct applies remain a strict
+  GitOps caveat. Infrastructure was not changed and AWS resources remain running.

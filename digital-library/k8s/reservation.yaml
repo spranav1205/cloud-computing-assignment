@@ -19,7 +19,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: reservation
-          image: "380560899065.dkr.ecr.ap-south-1.amazonaws.com/digital-library-dev/reservation@sha256:4ddd6a7dcd8fe4de34223991a14c58866d111cd72c89b7dcae9dd18818c03ee4"
+          image: "380560899065.dkr.ecr.ap-south-1.amazonaws.com/digital-library-dev/reservation@sha256:dad537a25032002635588ab731c1d3509bc06704ab64091c4f7da7bbd4c6accb"
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

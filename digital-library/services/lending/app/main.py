@@ -27,6 +27,7 @@ from app.database import (
     initialize_database,
 )
 from app.models import LoanCreate, LoanPage, LoanResponse
+from app.notifications import LoanNotifications, notification_id
 
 logger = logging.getLogger("lending")
 
@@ -36,6 +37,7 @@ def create_app(
     store: LendingStore | None = None,
     dependencies: LendingDependencies | None = None,
     loan_period_days: int | None = None,
+    notifications: LoanNotifications | None = None,
 ) -> FastAPI:
     logging.basicConfig(stream=sys.stdout, level=logging.INFO, format="%(message)s")
     period = configured_loan_period_days() if loan_period_days is None else loan_period_days
@@ -51,13 +53,25 @@ def create_app(
         else:
             application.state.store = store
         application.state.dependencies = dependencies if dependencies is not None else LendingDependencies.configured()
+        application.state.notifications = notifications if notifications is not None else LoanNotifications.configured()
         yield
         if engine is None and store is None:
             application.state.store.engine.dispose()
         if dependencies is None:
             application.state.dependencies.close()
+        if notifications is None:
+            application.state.notifications.close()
 
     application = FastAPI(title="Digital Library Lending Service", lifespan=lifespan)
+
+    def notify_loan(loan, event_type):
+        event_id = notification_id(loan.loan_id, event_type)
+        try:
+            application.state.notifications.publish(loan, event_type)
+            logger.info("notification_queued event_type=%s loan_id=%s notification_id=%s", event_type, loan.loan_id, event_id)
+        except Exception as error:
+            # The loan is committed. Notification failure must not undo or fail it.
+            logger.warning("notification_publish_failed event_type=%s loan_id=%s notification_id=%s error=%s", event_type, loan.loan_id, event_id, type(error).__name__)
     registry = CollectorRegistry()
     requests = Counter("lending_http_requests_total", "HTTP requests", ["method", "route", "status"], registry=registry)
     durations = Histogram(
@@ -111,6 +125,7 @@ def create_app(
     def checkout(data: LoanCreate, request: Request, response: Response):
         book_id = request.app.state.dependencies.validate_checkout(data)
         loan = request.app.state.store.create(data, book_id, period)
+        notify_loan(loan, "LoanIssued")
         response.headers["Location"] = f"/loans/{loan.loan_id}"
         return loan
 
@@ -135,9 +150,11 @@ def create_app(
 
     @application.post("/loans/{loan_id}/return", response_model=LoanResponse)
     def return_loan(loan_id: UUID, request: Request):
-        loan = request.app.state.store.return_loan(loan_id)
+        loan, changed = request.app.state.store.return_loan(loan_id)
         if loan is None:
             raise HTTPException(404, "Loan not found")
+        if changed:
+            notify_loan(loan, "LoanReturned")
         request.app.state.dependencies.cancel_reservation(loan.reservation_id)
         return loan
 

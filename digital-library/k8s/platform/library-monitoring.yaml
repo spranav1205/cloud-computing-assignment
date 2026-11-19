@@ -12,7 +12,7 @@ spec:
     matchExpressions:
       - key: app
         operator: In
-        values: [member, catalog, lending, availability, fine]
+        values: [member, catalog, lending, availability, fine, reservation, notification]
   podTargetLabels: [app]
   podMetricsEndpoints:
     - port: http
@@ -33,11 +33,11 @@ data:
       "uid": "library-services-live",
       "title": "Digital Library Live Metrics",
       "schemaVersion": 39,
-      "version": 1,
+      "version": 2,
       "refresh": "15s",
       "time": {"from": "now-30m", "to": "now"},
       "panels": [
-        {"id":1,"type":"stat","title":"Services being scraped","gridPos":{"h":5,"w":24,"x":0,"y":0},"targets":[{"expr":"sum by (app) (up{namespace=\"library\",app=~\"member|catalog|lending|availability|fine\"})","legendFormat":"{{app}}","refId":"A"}]},
+        {"id":1,"type":"stat","title":"Services being scraped","gridPos":{"h":5,"w":24,"x":0,"y":0},"targets":[{"expr":"sum by (app) (up{namespace=\"library\",app=~\"member|catalog|lending|availability|fine|reservation|notification\"})","legendFormat":"{{app}}","refId":"A"}]},
         {"id":2,"type":"timeseries","title":"HTTP requests per second","gridPos":{"h":8,"w":12,"x":0,"y":5},"targets":[{"expr":"sum by (app) (rate({__name__=~\".+_http_requests_total\",namespace=\"library\"}[5m]))","legendFormat":"{{app}}","refId":"A"}]},
         {"id":3,"type":"timeseries","title":"HTTP 5xx errors per second","gridPos":{"h":8,"w":12,"x":12,"y":5},"targets":[{"expr":"sum by (app) (rate({__name__=~\".+_http_requests_total\",namespace=\"library\",status=~\"5..\"}[5m]))","legendFormat":"{{app}}","refId":"A"}]},
         {"id":4,"type":"timeseries","title":"HTTP latency p95 (seconds)","gridPos":{"h":8,"w":12,"x":0,"y":13},"targets":[{"expr":"histogram_quantile(0.95, sum by (app, le) (rate({__name__=~\".+_http_request_duration_seconds_bucket\",namespace=\"library\"}[5m])))","legendFormat":"{{app}}","refId":"A"}]},
