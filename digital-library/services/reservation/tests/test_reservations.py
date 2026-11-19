@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
+from prometheus_client.parser import text_string_to_metric_families
 from sqlalchemy import create_engine
 
 from app.database import ReservationStore, initialize_database
@@ -34,6 +35,35 @@ def test_duplicate_active_reservation_is_rejected(tmp_path):
         payload = {"book_id": str(uuid4()), "member_id": str(uuid4())}
         assert api.post("/reservations", json=payload).status_code == 201
         assert api.post("/reservations", json=payload).status_code == 409
+
+
+def test_metrics_track_conflicts_and_use_route_templates(tmp_path):
+    with client(tmp_path) as api:
+        payload = {"book_id": str(uuid4()), "member_id": str(uuid4())}
+        assert api.post("/reservations", json=payload).status_code == 201
+        assert api.post("/reservations", json=payload).status_code == 409
+        for _ in range(2):
+            assert api.get(f"/reservations/{uuid4()}").status_code == 404
+        assert api.get("/reservations/not-a-uuid").status_code == 422
+        response = api.get("/metrics")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/plain; version=0.0.4")
+        samples = [s for f in text_string_to_metric_families(response.text) for s in f.samples]
+        for method, route, status, count in [
+            ("POST", "/reservations", "201", 1),
+            ("POST", "/reservations", "409", 1),
+            ("GET", "/reservations/{reservation_id}", "404", 2),
+            ("GET", "/reservations/{reservation_id}", "422", 1),
+        ]:
+            assert any(s.name == "reservation_http_requests_total" and s.labels == {
+                "method": method, "route": route, "status": status,
+            } and s.value == count for s in samples)
+        assert any(s.name == "reservation_http_request_duration_seconds_count" and s.labels == {
+            "method": "GET", "route": "/reservations/{reservation_id}",
+        } and s.value == 3 for s in samples)
+
+    with client(tmp_path) as api:
+        assert 'route="/reservations"' not in api.get("/metrics").text
 
 
 def test_member_can_list_reservations_from_backend(tmp_path):

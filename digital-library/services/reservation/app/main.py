@@ -1,10 +1,13 @@
 """FIFO reservation API."""
 
 from contextlib import asynccontextmanager
+from time import perf_counter
 from uuid import UUID
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
+from prometheus_client import CollectorRegistry, Counter, Histogram, generate_latest
+from prometheus_client.exposition import CONTENT_TYPE_LATEST
 
 from app.coordinator import configured_coordinator
 from app.dependencies import ReservationDependencies
@@ -38,6 +41,22 @@ def create_app(store: ReservationStore | None = None, coordinator=None, dependen
             application.state.dependencies.close()
 
     app = FastAPI(title="Digital Library Reservation Service", lifespan=lifespan)
+    registry = CollectorRegistry()
+    requests = Counter("reservation_http_requests_total", "HTTP requests", ["method", "route", "status"], registry=registry)
+    durations = Histogram("reservation_http_request_duration_seconds", "HTTP duration", ["method", "route"], registry=registry)
+
+    @app.middleware("http")
+    async def record_request(request: Request, call_next):
+        started = perf_counter()
+        status = 500
+        try:
+            response = await call_next(request)
+            status = response.status_code
+            return response
+        finally:
+            route = getattr(request.scope.get("route"), "path", "unmatched")
+            requests.labels(request.method, route, str(status)).inc()
+            durations.labels(request.method, route).observe(perf_counter() - started)
 
     @app.exception_handler(DuplicateReservationError)
     async def duplicate_reservation(request: Request, error: DuplicateReservationError):
@@ -49,6 +68,10 @@ def create_app(store: ReservationStore | None = None, coordinator=None, dependen
     @app.get("/health")
     def health():
         return {"status": "ok"}
+
+    @app.get("/metrics", include_in_schema=False)
+    def metrics():
+        return Response(generate_latest(registry), headers={"Content-Type": CONTENT_TYPE_LATEST})
 
     @app.get("/ready")
     def ready(request: Request):
