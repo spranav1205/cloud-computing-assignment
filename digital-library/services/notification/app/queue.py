@@ -25,7 +25,7 @@ class InMemoryQueue(NotificationQueue):
         self._lock = Lock()
 
     def publish(self, event: NotificationEvent) -> UUID:
-        notification_id = uuid4()
+        notification_id = event.event_id or uuid4()
         with self._lock:
             self.events.append((notification_id, event))
         return notification_id
@@ -38,7 +38,7 @@ class SqsQueue(NotificationQueue):
         self.queue_url = queue_url
 
     def publish(self, event: NotificationEvent) -> UUID:
-        notification_id = uuid4()
+        notification_id = event.event_id or uuid4()
         self.client.send_message(
             QueueUrl=self.queue_url,
             MessageBody=json.dumps({

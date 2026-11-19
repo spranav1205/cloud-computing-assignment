@@ -162,6 +162,7 @@ services:
       MEMBER_URL: http://member:8001
       CATALOG_URL: http://catalog:8002
       RESERVATION_URL: http://reservation:8003
+      NOTIFICATION_URL: http://notification:8004
       LOAN_PERIOD_DAYS: "14"
     depends_on:
       postgres:

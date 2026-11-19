@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import create_engine, func, select, text
+from sqlalchemy import create_engine, func, select, text, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -111,16 +111,15 @@ class LendingStore:
             total = session.scalar(count_statement) or 0
             return loans, total
 
-    def return_loan(self, loan_id: UUID, returned_at: datetime | None = None) -> Loan | None:
+    def return_loan(self, loan_id: UUID, returned_at: datetime | None = None) -> tuple[Loan | None, bool]:
         with Session(self.engine) as session:
+            changed = session.execute(
+                update(Loan).where(Loan.loan_id == loan_id, Loan.returned_at.is_(None))
+                .values(returned_at=returned_at or datetime.now(timezone.utc))
+            ).rowcount == 1
+            session.commit()
             loan = session.get(Loan, loan_id)
-            if loan is None:
-                return None
-            if loan.returned_at is None:
-                loan.returned_at = returned_at or datetime.now(timezone.utc)
-                session.commit()
-                session.refresh(loan)
-            return loan
+            return loan, changed
 
 
 def initialize_database(engine: Engine) -> None:
