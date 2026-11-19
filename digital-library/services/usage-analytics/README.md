@@ -69,3 +69,19 @@ runtime has the required Kafka connector dependencies via the shaded jar and
 the event/results topics exist before submission. The local unit tests validate
 the event contract and aggregation; no AWS cluster or Kafka broker is provisioned
 or contacted by this repository workflow.
+
+## Live AWS audit
+
+The complete `.local/final-api-audit.py` runner has a `flink` section that submits
+the built jar to the existing single-node EMR cluster, injects isolated Kafka
+fixtures, validates exact window output, and inspects completed checkpoints before
+stopping the test application. See [the demo guide](../../DEMO_AUDIT.md).
+
+The tested EMR application-mode submission selects Java 17, parallelism/slots 1,
+768 MiB JobManager and 1536 MiB TaskManager process memory. It propagates Kafka
+environment settings to the YARN application master and uses
+`-Dclassloader.resolve-order=parent-first` to prevent a Kafka
+`OffsetResetStrategy` classloader collision observed on EMR 7.14.0. The audit
+uses labeled topics so unrelated domain events cannot affect expected counts.
+This demonstrates the Flink pipeline; Lending/Reservation domain publishers
+remain a separate implementation gap.

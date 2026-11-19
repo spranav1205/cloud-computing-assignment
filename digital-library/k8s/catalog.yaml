@@ -25,7 +25,7 @@ metadata:
   name: catalog
   namespace: library
 spec:
-  replicas: 1
+  # The HPA owns replicas; GitOps must not reset its scale decisions.
   revisionHistoryLimit: 2
   selector:
     matchLabels:
