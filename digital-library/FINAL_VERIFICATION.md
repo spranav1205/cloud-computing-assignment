@@ -1,13 +1,19 @@
 # AWS verification and one-service-at-a-time CLI tests
 
 **19 November 2026.** Tests use the deployed AWS app, not Compose or mocks.
+For the final presentation, run `python demo.py` from the repository root. It
+contains the same live test functions as the audit below and waits for Enter
+before each of seven sections. Type `q` to finish safely; `--auto` skips prompts.
+New presentation results use `.local/demo-report.json` and `demo-runs/`; the
+original complete audit and its evidence remain available separately.
+
 The complete `.local/final-api-audit.py` now passed **146 functional HTTP checks,
 37,956 read-only load requests and 79 assertions**, across API, gRPC/ZooKeeper,
 fine, notification, Prometheus, Flink and HPA sections. Both HPAs scaled **1 → 2 → 1**;
 Argo CD stayed Synced/Healthy while scaled out. Flink produced exact one-minute
 window results for two fixture books and completed a checkpoint on the existing
 EMR primary. The audit stopped its Flink application and HTTP load; cleanup passed.
-See [DEMO_AUDIT.md](DEMO_AUDIT.md) for the one-command demonstration and bounds.
+See [interactive demo instructions](README.md#final-terminal-demo) for the one-command demonstration and bounds.
 The Flink snapshot records one completed and one failed checkpoint attempt;
 zero-failure checkpointing and failure recovery are not asserted.
 
@@ -34,7 +40,7 @@ to the member's stored email. Both reached the SES simulator before any explicit
 notification POST; replaying their stable IDs produced duplicate-suppression logs
 and no second delivery. Four concurrent returns produced one return event and
 one return timestamp. Argo CD was Synced/Healthy and all seven scrape targets
-remained up. See [NOTIFICATIONS.md](NOTIFICATIONS.md) for policy and reproduction.
+remained up. See [notification behavior](README.md#services-and-behavior) for policy and reproduction.
 The 144-request audit and 13-block CLI run above predate this notification change;
 the targeted 18-request audit validates the changed flows. The subsequent complete
 146-check/79-assertion audit above also reruns those capabilities in one file.
@@ -222,7 +228,7 @@ Api reservation "/reservations/$($Waiter.reservation_id)" DELETE
 POST returns 202/QUEUED. This tests explicit intake in addition to the automatic
 checkout/return flow. The simulator receives no real person's email. The earlier
 CLI members use example addresses; their automatic events do not prove SES delivery.
-Use the simulator-only audit in [NOTIFICATIONS.md](NOTIFICATIONS.md) for that proof.
+Use the simulator-only audit in [notification behavior](README.md#services-and-behavior) for that proof.
 
 ```powershell
 $Event = @{event_type='LoanReturned';recipient='success@simulator.amazonses.com';subject="CLI verification $Run";body='AWS API test completed.';member_id=$Member.member_id;occurred_at=[DateTime]::UtcNow.ToString('o')}

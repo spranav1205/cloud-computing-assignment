@@ -72,10 +72,10 @@ or contacted by this repository workflow.
 
 ## Live AWS audit
 
-The complete `.local/final-api-audit.py` runner has a `flink` section that submits
+The root `demo.py` presenter has a `flink` section that submits
 the built jar to the existing single-node EMR cluster, injects isolated Kafka
 fixtures, validates exact window output, and inspects completed checkpoints before
-stopping the test application. See [the demo guide](../../DEMO_AUDIT.md).
+stopping the test application. See [the demo instructions](../../README.md#final-terminal-demo).
 
 The tested EMR application-mode submission selects Java 17, parallelism/slots 1,
 768 MiB JobManager and 1536 MiB TaskManager process memory. It propagates Kafka
@@ -85,3 +85,7 @@ environment settings to the YARN application master and uses
 uses labeled topics so unrelated domain events cannot affect expected counts.
 This demonstrates the Flink pipeline; Lending/Reservation domain publishers
 remain a separate implementation gap.
+
+Run `python demo.py --sections flink` from the repository root and press Enter
+to submit the bounded live demonstration. `--auto` skips the prompt. The script
+prints actual window JSON and checkpoint counters, then stops its test job.

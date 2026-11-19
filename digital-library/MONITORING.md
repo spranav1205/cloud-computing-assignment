@@ -79,4 +79,9 @@ Argo CD; targets, requests and min/max replica settings were not changed.
 The test uses read-only `/health` requests and waits for automatic scale-down
 after the existing 180-second stabilization window. It does not prove business
 API capacity. Full evidence is in `.local/final-api-audit.json` under `prometheus`
-and `autoscaling`; see [DEMO_AUDIT.md](DEMO_AUDIT.md) for the command and bounds.
+and `autoscaling`; see [the demo instructions](README.md#final-terminal-demo) for the command and bounds.
+
+For the final presentation, run `python demo.py --sections metrics,hpa` from the
+repository root. Press Enter before each section. Metrics prints actual scrape
+status, RPS and p95 values; HPA prints live CPU/replica samples and waits for
+automatic scale-down. New results are in `.local/demo-report.json`.

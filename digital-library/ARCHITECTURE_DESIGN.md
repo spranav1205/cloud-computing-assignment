@@ -8,7 +8,7 @@ services: each service owns a clear responsibility and communicates with other
 services through APIs or messages.
 
 The project has seven HTTP APIs, a web frontend, and a separate Flink stream
-processing job. In AWS, the APIs and frontend are designed to run on EKS. Data
+processing job. In AWS, the APIs and frontend run on EKS. Data
 uses PostgreSQL, DynamoDB, and S3. SQS and Lambda handle asynchronous
 notifications, while Kafka and Flink provide the analytics path.
 
@@ -28,13 +28,14 @@ flowchart LR
         Frontend[Web frontend]
     end
 
-    Reader -. "frontend access: port-forward or add an ingress route" .-> Frontend
+    Ingress -->|/ and browser API proxy| Frontend
     Frontend -->|REST proxy| APIs
     Reservation -->|REST| Member
     Reservation -->|REST| Availability
     Lending -->|gRPC eligibility| Member
     Lending -->|REST| Catalog
     Lending -->|REST| Reservation
+    Lending -->|automatic loan events| Notification
     Availability -->|REST: copy identities| Catalog
 
     Member -->|member records| Postgres[(RDS PostgreSQL)]
@@ -63,12 +64,12 @@ or loan events to Kafka.
 
 | Component | Responsibility | Main data or connections |
 | --- | --- | --- |
-| **Member** | Create and manage reader accounts; answer checkout eligibility checks. | Owns member records in PostgreSQL. Provides REST and a typed gRPC eligibility endpoint. |
+| **Member** | Create and manage reader accounts; answer checkout eligibility checks. | Owns member records in PostgreSQL. Provides REST and a gRPC eligibility endpoint. |
 | **Catalog** | Manage books, physical-copy identities, and cover images. | Owns book/copy records in DynamoDB and cover objects in S3. |
 | **Reservation** | Place and cancel holds; keep a FIFO queue and assign available copies. | Owns reservation state in PostgreSQL. Checks Member and Availability over REST. Uses ZooKeeper locks in the cluster configuration. |
-| **Lending** | Validate checkout and return operations; track due dates and loan versions. | Owns loan records in PostgreSQL. Calls Member by gRPC and Catalog and Reservation by REST. |
+| **Lending** | Validate checkout and return operations; track due dates and idempotent returns. | Owns loan records in PostgreSQL. Calls Member by gRPC and Catalog and Reservation by REST. |
 | **Availability** | Report copy states and counts without owning catalog, reservation, or loan records. | Reads copy identities from Catalog and loan/reservation state from PostgreSQL. |
-| **Fine Calculation** | Calculate and persist a member's assessed fines using the configured policy. | Reads Lending-owned loan records; does not own or modify loans. |
+| **Fine Calculation** | Calculate overdue fines from loan timestamps using the configured policy. | Reads Lending-owned loan records; does not own or modify loans. |
 | **Notification** | Accept notification requests and deliver them asynchronously. | Uses an in-memory queue locally; in AWS, the API publishes to SQS and Lambda consumes messages and sends email through SES. |
 | **Usage Analytics** | Aggregate library activity by book and one-minute event-time window. | Flink reads `library.events.v1` and writes `library.analytics.results.v1`. The job is submitted to EMR. |
 | **Frontend** | Provide the reader-facing web interface and proxy browser API requests. | Node.js frontend proxies `/api/...` requests to the HTTP APIs. |
@@ -85,9 +86,8 @@ or loan events to Kafka.
 
 ## 4. Cloud deployment architecture
 
-The following is the planned AWS layout described by the Terraform and
-Kubernetes files. It is a deployment design, not proof that AWS resources have
-been created.
+The following layout is deployed on AWS. Actual verification and remaining
+caveats are recorded in [FINAL_VERIFICATION.md](FINAL_VERIFICATION.md).
 
 ```mermaid
 flowchart TB
@@ -176,20 +176,24 @@ flowchart TB
 
 ## 6. Current implementation notes
 
-- The Terraform, Kubernetes, and Argo CD files describe a proposed cloud
-  deployment. The repository documentation says AWS deployment has not been
-  performed.
-- The configured Ingress sends selected API paths to Member, Catalog,
-  Reservation, Lending, and Availability. The frontend is a ClusterIP service;
-  its `/` route is not currently included in that Ingress. Use a port-forward
-  for a demo or add an approved frontend route.
-- Terraform currently fixes the EKS worker group at one node. The two HPAs can
-  add pods, but there is no node autoscaler configured to add worker capacity.
-- Kafka topics are declared in Kubernetes as `library.events.v1` and
-  `library.analytics.results.v1`. The Flink job uses those topic names by
-  default, but Reservation and Lending do not yet publish events to Kafka.
-- The shared event-envelope schema uses camelCase fields, while the Flink job
-  currently expects `event_type`, `book_id`, `member_id`, and `occurred_at`.
-  Align the producer and consumer schemas before enabling the live event flow.
-- Local Docker Compose runs the HTTP APIs and storage emulators. Kafka and the
-  Flink-on-EMR job are separate from that local stack.
+- The app is deployed. `python demo.py` presents its REST/storage, gRPC,
+  ZooKeeper, fine, notification, Prometheus, Flink and HPA checks one function
+  at a time, waiting for Enter before each step.
+- The ALB routes `/` to the frontend and browser API calls use its `/api/...`
+  proxy. Services retain their internal `/members`, `/books`, `/loans`, etc. paths.
+- EKS uses one t3.xlarge worker and EMR uses one m5.xlarge primary: 8/8 vCPUs.
+  HPAs scale Catalog/Reservation pods from 1 to 2 and back; no node autoscaler is
+  configured. Git omits their replica counts so HPA decisions are preserved.
+- Seven APIs expose metrics. Prometheus/Grafana and aggregated CloudWatch logs
+  are operational; see [MONITORING.md](MONITORING.md).
+- LoanIssued/LoanReturned notifications are best-effort after commit, use stored
+  member emails and stable IDs, and deliver through SQS/Lambda/SES. Publishing
+  failures do not fail the committed transaction; no durable outbox is present.
+- The real Flink job passed isolated Kafka fixtures and checkpoint/output checks.
+  Default topics are `library.events.v1` and `library.analytics.results.v1`;
+  Lending/Reservation domain publishers are not implemented. The shared event
+  envelope and Flink's snake_case fields need alignment before connecting them.
+- API deployments use Argo CD. Historical bootstrap/monitoring direct applies
+  remain a strict GitOps caveat. Bounded load tests do not prove business API
+  capacity or failover. The fine fixture does not backdate production loans.
+- Local Compose runs APIs/storage emulators. Kafka/Flink are separate.
