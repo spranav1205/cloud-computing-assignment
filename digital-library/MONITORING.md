@@ -61,3 +61,22 @@ Current evidence is `.local/metrics-verification.json`; the original five-servic
 baseline remains in `.local/monitoring-verification.json`.
 Monitoring storage is ephemeral for this demo; no additional disk or storage
 service was provisioned.
+
+## Live autoscaling audit
+
+The complete `.local/final-api-audit.py` now checks seven real scrape targets,
+finite request/latency series, CPU and HPA metrics. The successful complete run
+passed 146 functional HTTP checks, 37,956 load requests and 79 assertions.
+Catalog and Reservation both scaled 1 → 2 → 1; Prometheus recorded their load,
+extra scraped replicas and HPA desired-replica history. Argo CD stayed
+Synced/Healthy during scale-out.
+
+The first load trial exposed a conflict with Git's fixed `replicas: 1`.
+Deployment revision `e51d8c1` removes that field from the two HPA-managed
+Deployments so the HPAs own replica counts. The correction was deployed through
+Argo CD; targets, requests and min/max replica settings were not changed.
+
+The test uses read-only `/health` requests and waits for automatic scale-down
+after the existing 180-second stabilization window. It does not prove business
+API capacity. Full evidence is in `.local/final-api-audit.json` under `prometheus`
+and `autoscaling`; see [DEMO_AUDIT.md](DEMO_AUDIT.md) for the command and bounds.

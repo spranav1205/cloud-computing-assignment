@@ -1,10 +1,20 @@
 # AWS verification and one-service-at-a-time CLI tests
 
 **19 November 2026.** Tests use the deployed AWS app, not Compose or mocks.
+The complete `.local/final-api-audit.py` now passed **146 functional HTTP checks,
+37,956 read-only load requests and 79 assertions**, across API, gRPC/ZooKeeper,
+fine, notification, Prometheus, Flink and HPA sections. Both HPAs scaled **1 → 2 → 1**;
+Argo CD stayed Synced/Healthy while scaled out. Flink produced exact one-minute
+window results for two fixture books and completed a checkpoint on the existing
+EMR primary. The audit stopped its Flink application and HTTP load; cleanup passed.
+See [DEMO_AUDIT.md](DEMO_AUDIT.md) for the one-command demonstration and bounds.
+The Flink snapshot records one completed and one failed checkpoint attempt;
+zero-failure checkpointing and failure recovery are not asserted.
+
 Post-metrics baseline audit: **144 HTTP requests and 37 assertions passed**, including all **23
 implemented REST business endpoints**, validation, pagination, private covers,
-loan return, and five concurrent reservations. This does **not** mean all eight
-assignment services are complete: Usage Analytics is not demonstrated running.
+loan return, and five concurrent reservations. Usage Analytics is now demonstrated
+with isolated Kafka fixtures; Lending/Reservation still have no Kafka publisher.
 The original audit made no service/deployment changes. The subsequent metrics
 follow-up updates only Reservation/Notification images and the monitoring manifest.
 Test calls create labeled demo records; loans are returned and
@@ -26,7 +36,8 @@ and no second delivery. Four concurrent returns produced one return event and
 one return timestamp. Argo CD was Synced/Healthy and all seven scrape targets
 remained up. See [NOTIFICATIONS.md](NOTIFICATIONS.md) for policy and reproduction.
 The 144-request audit and 13-block CLI run above predate this notification change;
-the targeted 18-request audit validates the changed flows.
+the targeted 18-request audit validates the changed flows. The subsequent complete
+146-check/79-assertion audit above also reruns those capabilities in one file.
 
 ## Mandatory requirements a–h
 
@@ -34,16 +45,17 @@ the targeted 18-request audit validates the changed flows.
 |---|---|---|
 | a. IaC | Core infrastructure verified | Terraform state owns VPC/subnets/routes, EKS, RDS, DynamoDB, S3, IAM, Lambda/SQS and EMR. ALB is controller-created from the Ingress manifest; Helm/Kubernetes bootstrap is separate from Terraform. |
 | b. REST + gRPC + queues/serverless | Verified | Real REST calls; Member eligibility gRPC tested from Lending; explicit and automatic checkout/return events → SQS → Lambda → SES simulator delivery confirmed in CloudWatch. |
-| c. Managed K8s + two HPAs + load proof | Partial | EKS and Catalog/Reservation HPAs are healthy, min/max 1/2. **No sustained-load test demonstrating scale-out is recorded.** The five-request FIFO test is not an HPA load test. |
+| c. Managed K8s + two HPAs + load proof | Verified bounded demonstration | Both HPAs scaled 1 → 2 ready replicas under sustained read-only HTTP load and returned to 1 after load stopped. Targets stayed at 60%, min/max 1/2. Prometheus observed rates, CPU and replicas. This tests scaling, not business-endpoint capacity. |
 | d. GitOps, no direct service apply | Partial under the strict wording | API Deployments are Argo CD Synced/Healthy. Initial Kafka/ZooKeeper bootstrap and later monitoring resources were directly applied, so do not claim the entire Kubernetes deployment followed a no-`kubectl apply` process. |
-| e. Flink consuming Kafka, windowed output | **Not demonstrated / incomplete** | Windowed stateful job code and two `.v1` Kafka topics exist. EMR has no submitted steps, no analytics consumer group was observed, and both topics have zero records. Lending/Reservation contain no Kafka publisher. An idle EMR cluster is not a passing stream-processing demo. |
+| e. Flink consuming Kafka, windowed output | Verified isolated pipeline; publisher integration remains | Real jar ran on existing EMR/YARN, consumed synthetic Kafka input on labeled 3-partition topics, emitted two exact one-minute aggregates with distinct-member counts, and completed a checkpoint. The audit stops its job afterward. Lending/Reservation still have no automatic Kafka publisher; default `.v1` topics are not the fixture topics. |
 | f. ZooKeeper concept | Functional evidence verified | Three ZooKeeper pods, configured remote locking, live lock-path read, and five parallel reservation calls produced one READY + four WAITLISTED with FIFO positions/promotion. Cross-replica coordination and failure recovery were not tested. |
 | g. Three cloud storage products | Verified | Actual RDS PostgreSQL member/loan/reservation flows; DynamoDB books/copies/GSI; private S3 cover PUT/GET and unsigned 403. |
 | h. Observability | Operational | Prometheus/Grafana and real RPS/error/latency/cluster queries work; CloudWatch contains aggregated service log streams. All seven APIs expose metrics after the Reservation/Notification follow-up. |
 
-**Original task is not fully complete:** at minimum, e and the sustained-load
-demonstration in c remain; d needs attention if the strict prohibition includes
-platform services. Do not describe these as passed merely because the APIs work.
+Stream processing and sustained-load HPA scaling are now demonstrated. Remaining
+integration caveats include missing Lending/Reservation Kafka publishers and the
+strict GitOps distinction for historical bootstrap/monitoring direct applies.
+These bounded tests do not establish fault recovery or business API capacity.
 
 ## API/service coverage
 
@@ -56,7 +68,7 @@ platform services. Do not describe these as passed merely because the APIs work.
 | Availability | Before hold, during loan, after return/cancellation; missing/invalid book IDs | Derived state, not a separate write API |
 | Fine | Active/returned loan assessment, zero fine, missing/invalid IDs; isolated deployed-code overdue HTTP fixture passed | **A positive overdue fine remains untested through the public ingress.** The isolated fixture runs the deployed code in the existing AWS Fine pod against temporary SQLite, with active/returned overdue loans producing 300 cents. Production RDS loan dates are untouched. |
 | Notification | Valid/invalid event POST, metrics, automatic checkout/return delivery, stable-ID replay suppression | Best-effort publishing; no durable outbox. SES recipient restrictions still apply. |
-| Usage Analytics | Kafka topics/offsets and EMR submission state inspected | No REST API by design; no running Flink/output demonstration |
+| Usage Analytics | Real EMR/YARN Flink job, input/output offsets, exact window counts and distinct members, completed checkpoint | No REST API by design. Uses isolated synthetic Kafka topics; domain publishers remain absent. Test application is stopped in cleanup. |
 
 ## Run the CLI examples
 
@@ -270,11 +282,15 @@ kubectl --kubeconfig $Kube -n library get hpa
 kubectl --kubeconfig $Kube -n argocd get applications
 ```
 
-### 12. Usage Analytics — inspect the gap, not a REST endpoint
+### 12. Usage Analytics — inspect Kafka and EMR
 
-At verification, the consumer-group list was empty, all partition offsets in
-both topics were 0, and EMR had no steps. These commands are tested **diagnostic
-checks**, not evidence of a successful Flink run. No job or events are submitted.
+The original baseline had no consumer group, nonzero offsets or EMR steps. The
+complete audit now submits a real Flink job and validates output on isolated
+`library.audit.RUN_ID.events` and `.results` topics. These commands inspect the
+default topics and historical EMR steps; they do not submit a job or events.
+Use `.local/final-api-audit.json` → `flink` for the exact successful audit's topic
+names, application/step IDs, input records, results and checkpoint evidence.
+Historical EMR steps also include earlier diagnostic attempts.
 
 ```powershell
 kubectl --kubeconfig $Kube -n library exec kafka-0 -- /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list
@@ -298,9 +314,11 @@ Get-Content digital-library/scripts/verify-overdue-fixture.py -Raw | kubectl --k
 if ($LASTEXITCODE -ne 0) { throw 'Isolated overdue fixture failed' }
 ```
 
-Evidence artifacts: `.local/final-api-audit.json` contains each HTTP result and
-assertion from `.local/final-api-audit-metrics.py`; the original 35-assertion result
-is archived in `.local/final-api-audit-before-metrics.json`.
+Evidence artifacts: `.local/final-api-audit.json` contains the complete current
+audit from `.local/final-api-audit.py`, including all seven sections, load/cooldown
+samples, Prometheus replica history and Flink results/checkpoints. The successful
+run is archived in `.local/audit-runs/616db3cdeb91443e947243b56f23dd58/report.json`.
+The original 35-assertion result is archived in `.local/final-api-audit-before-metrics.json`.
 `.local/cli-guide-verification.json` and `.local/cli-guide-verification.txt` record
 all 13 sequential blocks and actual SES delivery. `.local/metrics-verification.json`
 records seven scrape targets and dashboard query results;
@@ -308,7 +326,8 @@ records seven scrape targets and dashboard query results;
 `.local/loan-notifications-verification.json` records the subsequent 18-request
 automatic-notification audit, Lambda delivery/duplicate logs, Lending queue logs,
 Argo CD health and seven healthy scrape targets.
-The API test is functional and bounded, not a load/security/failover test.
+The current audit includes a bounded HTTP load test. It is not a security,
+business-capacity or failover test.
 
 ## Remaining decisions and assignment caveats
 
@@ -319,8 +338,9 @@ The API test is functional and bounded, not a load/security/failover test.
   Notification failure handling passed container tests, not a forced live outage.
 - Positive overdue fines passed the isolated deployed-code fixture, but remain
   untested through public ingress. No production loan dates were changed.
-- Usage Analytics still lacks a running Flink demonstration, input events and
-  output results. Lending/Reservation still have no Kafka publisher.
-- Catalog/Reservation HPAs remain healthy; sustained-load scale-out is unproven.
+- Usage Analytics has passed a real isolated Flink/Kafka demonstration; automatic
+  Lending/Reservation Kafka publishers remain unimplemented.
+- Catalog/Reservation HPAs passed sustained read-only load, scale-out, scale-down
+  and Prometheus checks. This does not establish business-endpoint capacity.
 - API updates use Argo CD; bootstrap/monitoring direct applies remain a strict
   GitOps caveat. Infrastructure was not changed and AWS resources remain running.

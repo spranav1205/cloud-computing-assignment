@@ -1,8 +1,8 @@
 # Usage Analytics Flink Job
 
-The job reads domain events from Kafka topic `library.events`, computes keyed
+The job reads domain events from Kafka topic `library.events.v1`, computes keyed
 one-minute event-time aggregates per book, and writes JSON results to the
-separate `library.analytics.results` topic. It uses Flink's incremental window
+separate `library.analytics.results.v1` topic. It uses Flink's incremental window
 aggregate and retains a set of member IDs for each active book/window to count
 distinct borrowers/reservers.
 
@@ -52,8 +52,8 @@ network access to Kafka:
 
 ```sh
 export KAFKA_BOOTSTRAP_SERVERS='broker1:9092,broker2:9092'
-export KAFKA_INPUT_TOPIC='library.events'
-export KAFKA_RESULTS_TOPIC='library.analytics.results'
+export KAFKA_INPUT_TOPIC='library.events.v1'
+export KAFKA_RESULTS_TOPIC='library.analytics.results.v1'
 export KAFKA_CONSUMER_GROUP='library-usage-analytics'
 export KAFKA_CLIENT_PROPERTIES='{}'
 flink run -m yarn-cluster -d \
@@ -69,3 +69,19 @@ runtime has the required Kafka connector dependencies via the shaded jar and
 the event/results topics exist before submission. The local unit tests validate
 the event contract and aggregation; no AWS cluster or Kafka broker is provisioned
 or contacted by this repository workflow.
+
+## Live AWS audit
+
+The complete `.local/final-api-audit.py` runner has a `flink` section that submits
+the built jar to the existing single-node EMR cluster, injects isolated Kafka
+fixtures, validates exact window output, and inspects completed checkpoints before
+stopping the test application. See [the demo guide](../../DEMO_AUDIT.md).
+
+The tested EMR application-mode submission selects Java 17, parallelism/slots 1,
+768 MiB JobManager and 1536 MiB TaskManager process memory. It propagates Kafka
+environment settings to the YARN application master and uses
+`-Dclassloader.resolve-order=parent-first` to prevent a Kafka
+`OffsetResetStrategy` classloader collision observed on EMR 7.14.0. The audit
+uses labeled topics so unrelated domain events cannot affect expected counts.
+This demonstrates the Flink pipeline; Lending/Reservation domain publishers
+remain a separate implementation gap.
