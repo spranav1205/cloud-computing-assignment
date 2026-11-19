@@ -75,4 +75,4 @@ foreach ($path in $prepared.Keys) {
     [System.IO.File]::WriteAllText($path, $prepared[$path], [System.Text.UTF8Encoding]::new($false))
 }
 Write-Host 'Updated local Kubernetes images and AWS settings. Review the diff, then commit for Argo CD.'
-Write-Host 'Database roles/Secrets, rds-ca, Argo CD, and the ALB controller must exist before sync; see DEPLOY.md.'
+Write-Host 'Database roles/Secrets, rds-ca, Argo CD, and the ALB controller must exist before sync; see k8s/README.md.'

@@ -1,139 +1,138 @@
 # Digital Library
 
-Digital Library lets readers browse books, manage memberships, reserve copies,
-borrow and return books, check availability, and receive notifications.
+The application is deployed on AWS in `ap-south-1`. It has seven REST APIs, a
+Member gRPC endpoint, a web frontend, and a separate Kafka/Flink analytics job.
+RDS PostgreSQL, DynamoDB and private S3 provide the three storage products.
 
-The backend has **eight microservices**: seven HTTP APIs and one Flink
-stream-processing job. A separate web frontend provides the reader interface.
-See [ARCHITECTURE_DESIGN.md](ARCHITECTURE_DESIGN.md) for diagrams and details.
-
-## Services
-
-| Service | What it does | Interface |
-| --- | --- | --- |
-| Member | Manages reader accounts and checkout eligibility. | REST and gRPC |
-| Catalog | Manages books, copy identities, and cover images. | REST |
-| Reservation | Creates and queues copy reservations. | REST |
-| Lending | Checks out and returns copies; tracks loans and due dates. | REST |
-| Availability | Reports copy and book availability. | REST |
-| Fine Calculation | Calculates and records overdue fines. | REST |
-| Notification | Accepts notification requests and queues delivery. | REST; SQS/Lambda in AWS |
-| Usage Analytics | Aggregates reservation and loan activity in one-minute windows. | Kafka and Flink |
-
-The frontend is a web application, not an additional backend microservice.
-
-## Documentation
-
-| Document | What it covers |
-| --- | --- |
-| [Architecture design](ARCHITECTURE_DESIGN.md) | System and cloud diagrams, responsibilities, connections, and design rationale |
-| [AWS testing and safety](AWS_TESTING.md) | Cloud testing constraints, costs, and approval notes |
-| [Infrastructure guide](infra/README.md) | Terraform resources, networking, data stores, and AWS prerequisites |
-| [Kubernetes and GitOps guide](k8s/README.md) | Container images, Kubernetes manifests, Argo CD, and deployment handoff |
-| [Usage Analytics guide](services/usage-analytics/README.md) | Flink event format, aggregation, build, and EMR submission |
-
-## Run locally
-
-Prerequisites: Docker Desktop with Linux containers. Node.js 18 or newer is
-needed only for the frontend.
+## Final terminal demo
 
 From the repository root:
 
-```sh
-cd digital-library
+```powershell
+python demo.py
+```
+
+Press **Enter** before each demo and each regular HTTP request. It prints the
+actual JSON response and HTTP status. Regular API requests run sequentially;
+Flink and the sustained HPA load test each run as an explicitly started step.
+Type **q** at a prompt to finish and clean up created loans/holds. Ctrl+C also
+runs cleanup. Flink and autoscaling take several minutes; they do not provision
+new instances or change HPA limits.
+
+| Step | Demonstrates |
+|---|---|
+| 1. REST APIs and private S3 | All 23 business endpoints, validation, FIFO holds, checkout/return and byte-for-byte private cover storage |
+| 2. Member gRPC and ZooKeeper | Real eligibility RPCs and the reservation lock path |
+| 3. Positive overdue fines | Deployed Fine code over loopback HTTP using temporary SQLite; production loan dates remain untouched |
+| 4. Automatic email delivery | Checkout/return and explicit intake through SQS, Lambda and SES; duplicate-ID suppression |
+| 5. Prometheus | Seven healthy scrape targets, request rates, latency, CPU and HPA metrics |
+| 6. Kafka and Flink | Exact one-minute window counts/distinct members on existing EMR, completed checkpoint and test-job cleanup |
+| 7. Autoscaling | Both HPAs scale 1 -> 2 -> 1 under sustained read-only HTTP load, while Argo CD remains Synced/Healthy |
+
+Other ways to run it:
+
+```powershell
+python demo.py --list
+python demo.py --sections api,grpc,fine,notifications,metrics
+python demo.py --sections metrics,flink,hpa
+python demo.py --auto
+```
+
+`--auto` skips Enter prompts. Notifications requires `api` earlier in the same
+run because it uses that run's loan and event IDs. A failed demo is recorded and
+the next section still waits for Enter. An early quit is marked STOPPED, never
+as a complete PASS; cleanup failures still give a failing exit code.
+
+Prerequisites are Python 3.10+, AWS CLI with the existing `default` profile,
+`kubectl`, the running deployment, and these local files:
+
+- `digital-library/.local/deployed-url.txt` (or supply `--base-url`).
+- `digital-library/.local/recovery-kubeconfig` (or supply `--kubeconfig`).
+- `digital-library/services/usage-analytics/target/usage-analytics-1.0.0.jar` for
+  the Flink step; see its [build instructions](services/usage-analytics/README.md).
+
+No extra Python packages are needed for `demo.py`. It locates the project from
+its own path, so it also works when launched by absolute path from another
+terminal directory. Results go to `digital-library/.local/demo-report.json` and
+`digital-library/.local/demo-runs/RUN_ID/`. Previous full-audit evidence remains
+in `.local/final-api-audit.json`. Local config/results are ignored by Git; the
+standalone `demo.py` is tracked and does not import the ignored audit script.
+
+The underlying full audit passed **146 functional HTTP checks, 37,956 load
+requests and 79 assertions** on 19 November 2026. See
+[FINAL_VERIFICATION.md](FINAL_VERIFICATION.md) for evidence and the detailed CLI guide.
+
+## Services and behavior
+
+| Service | Responsibility |
+|---|---|
+| Member | Register/get/update/list members; answer gRPC checkout eligibility |
+| Catalog | Books, physical copies, private cover uploads/downloads |
+| Reservation | READY/WAITLISTED FIFO holds, cancellation and promotion |
+| Lending | Checkout, due dates, idempotent returns and automatic loan notifications |
+| Availability | Derive copy availability from Catalog, reservations and loans |
+| Fine | Read loan timestamps and calculate fines; does not modify loans |
+| Notification | Queue explicit/automatic events through SQS -> Lambda -> SES |
+| Usage Analytics | Kafka input -> one-minute Flink aggregates -> Kafka results |
+
+The frontend proxies `/api/...` to internal routes such as `/members`, `/books`,
+`/reservations` and `/loans`. The deployed app does not require an Idempotency-Key
+header. Reservations use READY and WAITLISTED states.
+
+`LoanIssued` and `LoanReturned` notifications use the member's stored email,
+with a stable UUIDv5 per loan/event pair. Repeated or concurrent returns emit one
+return event. Intake accepts optional `event_id`; older explicit requests without
+it keep random IDs. The existing Lambda/DynamoDB consumer suppresses repeated IDs
+within its retention window. Publishing is best-effort after commit: failures are
+logged and do not fail the committed loan operation. There is no durable outbox;
+crashes or failed publishes can lose events. Tests use labeled SES simulator
+addresses, not real recipients. SES sender/recipient restrictions still apply.
+
+Flink uses isolated synthetic Kafka fixtures. Lending/Reservation do not yet
+publish Kafka domain events automatically. The checkpoint evidence includes one
+completed and one failed attempt; zero-failure checkpointing/recovery is not
+asserted. HPA load uses read-only `/health` traffic and proves scaling, not
+business-endpoint capacity.
+
+## Deployment and limits
+
+API changes deploy through Argo CD from `deploy/deploy-20261118203335`.
+Publishing to `main` alone does not deploy. Initial platform bootstrap and some
+monitoring applies were direct, so strict end-to-end GitOps remains a caveat.
+
+Compute remains **one t3.xlarge EKS worker + one m5.xlarge EMR primary = 8 vCPUs**.
+Catalog/Reservation HPAs range from one to two pods; they do not add workers.
+Preserve RDS, DynamoDB and S3. The real bucket
+`replace-with-globally-unique-library-cover-bucket` is intentionally retained.
+AWS resources remain running and consuming credits. Infrastructure changes need
+a fresh reviewed Terraform plan; earlier full plans proposed an unrelated EMR
+replacement. Demo cleanup does not destroy infrastructure or retained records.
+
+## Local development and tests
+
+From `digital-library`, Docker Desktop with Linux containers can run the seven
+APIs and PostgreSQL/DynamoDB/MinIO emulators:
+
+```powershell
 docker compose up --build -d --wait --wait-timeout 600
-docker compose ps
+python scripts/smoke_test.py
 ```
 
-Compose starts the seven HTTP APIs, PostgreSQL, DynamoDB Local, and MinIO. It
-does not start the frontend, Kafka, or the Flink job. To run the frontend, open
-a second terminal in `digital-library` and run:
+Run `node frontend/server.js` separately for the local frontend. Local Compose
+does not start Kafka/Flink. Service unit tests live under each service's `tests/`.
+Presenter-control tests run from the repository root without AWS:
 
-```sh
-node frontend/server.js
+```powershell
+python -m unittest discover -s tests -v
 ```
 
-Open the frontend at [http://127.0.0.1:4173](http://127.0.0.1:4173). The
-frontend proxies API requests to the local services.
+## Essential documentation
 
-| API | Interactive docs |
-| --- | --- |
-| Member | [http://127.0.0.1:8001/docs](http://127.0.0.1:8001/docs) |
-| Catalog | [http://127.0.0.1:8002/docs](http://127.0.0.1:8002/docs) |
-| Reservation | [http://127.0.0.1:8003/docs](http://127.0.0.1:8003/docs) |
-| Notification | [http://127.0.0.1:8004/docs](http://127.0.0.1:8004/docs) |
-| Fine Calculation | [http://127.0.0.1:8005/docs](http://127.0.0.1:8005/docs) |
-| Lending | [http://127.0.0.1:8006/docs](http://127.0.0.1:8006/docs) |
-| Availability | [http://127.0.0.1:8007/docs](http://127.0.0.1:8007/docs) |
-
-To stop the local containers without deleting their data:
-
-```sh
-docker compose stop
-```
-
-PostgreSQL and MinIO data persist in Docker volumes. DynamoDB Local is
-in-memory, so restarting its container clears books and copies. Avoid
-`docker compose down -v` if you want to keep persistent volume data.
-
-## Try a reservation
-
-1. In the Member docs, create a reader.
-2. In the Catalog docs, create a book and add a copy.
-3. In the Reservation docs, create a reservation using the reader and book IDs.
-4. Create another reader and reserve the same book to see the waiting queue.
-
-Use the `/api/v1` routes for the architecture contracts. A reservation request
-requires an `Idempotency-Key` header. The first request for an available copy
-should be `READY`; the next should be `WAITING`.
-
-## Tests
-
-With the local APIs running, run the end-to-end API smoke test from the
-`digital-library` directory:
-
-```sh
-python3 scripts/smoke_test.py
-```
-
-It exercises the seven APIs and leaves small demo records. Unit tests are in
-each service's `tests` directory. For example, from `digital-library`:
-
-```sh
-cd services/lending
-python3 -m pip install -r requirements-dev.txt
-python3 -m pytest -q
-```
-
-Catalog tests require DynamoDB Local and MinIO. The Usage Analytics tests use
-Maven; see its guide for the build command.
-
-## Cloud deployment
-
-Terraform describes the AWS infrastructure. Kubernetes manifests describe the
-EKS services, autoscalers, ingress, and platform components. Argo CD is intended
-to reconcile those manifests from Git. The Flink job is submitted to EMR
-separately.
-
-**The repository documentation says AWS resources have not been deployed.**
-Read the [AWS testing and safety guide](AWS_TESTING.md) and
-[infrastructure guide](infra/README.md) before any cloud operation. Review
-[Kubernetes and GitOps](k8s/README.md) for image and cluster prerequisites.
-
-## Assignment implementation map
-
-| Requirement | Project components |
-| --- | --- |
-| Infrastructure as Code | Terraform under `infra/` |
-| Serverless and service communication | Notification SQS/Lambda; REST and Member-Lending gRPC; Kafka topics are configured, but API event producers are not yet connected |
-| Managed Kubernetes, autoscaling, and load testing | EKS configuration, Catalog and Reservation HPAs, and `scripts/k6/reservation-load.js` |
-| GitOps deployment | Argo CD Applications and Git-tracked Kustomize manifests |
-| Flink stream processing | Flink job under `services/usage-analytics/`, Kafka topics, and EMR configuration; live event flow has not been verified |
-| Domain concept | Reservation queue coordination with ZooKeeper in the Kubernetes configuration |
-| Cloud storage | RDS PostgreSQL, DynamoDB, and S3 |
-| Observability | Prometheus/Grafana configuration and Fluent Bit forwarding to CloudWatch |
-
-The frontend currently has a Kubernetes `ClusterIP` service, but the Ingress
-does not route `/` to it. Also, the analytics event envelope and Flink input
-fields need alignment before service events can be processed. These details are
-documented in [ARCHITECTURE_DESIGN.md](ARCHITECTURE_DESIGN.md).
+| Document | Purpose |
+|---|---|
+| [Verification](FINAL_VERIFICATION.md) | Assignment evidence, CLI checks and remaining caveats |
+| [Architecture](ARCHITECTURE_DESIGN.md) | Service and cloud diagrams/design |
+| [Monitoring](MONITORING.md) | Prometheus/Grafana access and credential retrieval |
+| [Infrastructure](infra/README.md) | Terraform resources, state and limits |
+| [Kubernetes/GitOps](k8s/README.md) | Image publication, database bootstrap, Secrets and deployment |
+| [Usage Analytics](services/usage-analytics/README.md) | Event contract, build and EMR submission |
